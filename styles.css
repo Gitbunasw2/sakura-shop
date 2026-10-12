@@ -158,6 +158,13 @@ h3 {
   gap: 10px;
   flex-wrap: wrap;
   margin-bottom: 14px;
+  align-items: center;
+}
+
+.top-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 input,

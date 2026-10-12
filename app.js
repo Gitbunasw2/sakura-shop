@@ -1,9 +1,9 @@
 const STORAGE_KEY = "sakura-shop-v1";
 
-const CATEGORIES = {
-  clothes: "Quần áo",
-  cosmetics: "Mỹ phẩm",
-};
+const DEFAULT_CATEGORIES = [
+  { id: "clothes", name: "Quần áo" },
+  { id: "cosmetics", name: "Mỹ phẩm" },
+];
 
 const STATUSES = {
   new: "Mới",
@@ -61,6 +61,7 @@ const seed = {
     },
   ],
   orders: [],
+  categories: structuredClone(DEFAULT_CATEGORIES),
 };
 
 let state = load();
@@ -70,18 +71,53 @@ function load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return structuredClone(seed);
-    const parsed = JSON.parse(raw);
-    return {
-      products: parsed.products || [],
-      orders: parsed.orders || [],
-    };
+    return normalizeState(JSON.parse(raw));
   } catch {
     return structuredClone(seed);
   }
 }
 
+function normalizeState(parsed) {
+  const products = parsed.products || [];
+  const orders = parsed.orders || [];
+  let categories = Array.isArray(parsed.categories) ? parsed.categories.filter((c) => c && c.id && c.name) : [];
+  if (!categories.length) categories = structuredClone(DEFAULT_CATEGORIES);
+  const known = new Set(categories.map((c) => c.id));
+  products.forEach((p) => {
+    if (p.category && !known.has(p.category)) {
+      categories.push({ id: p.category, name: p.category });
+      known.add(p.category);
+    }
+  });
+  return { products, orders, categories };
+}
+
 function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[c]));
+}
+
+function categoryById(id) {
+  return state.categories.find((c) => c.id === id);
+}
+
+function categoryName(id) {
+  return categoryById(id)?.name || id || "—";
+}
+
+function categoryOptions(selected) {
+  return state.categories
+    .map((c) => `<option value="${esc(c.id)}" ${c.id === selected ? "selected" : ""}>${esc(c.name)}</option>`)
+    .join("");
 }
 
 function uid(prefix) {
@@ -121,6 +157,7 @@ function openModal(title, html) {
 
 function closeModal() {
   document.getElementById("modal").classList.add("hidden");
+  if (currentView === "inventory") renderInventory();
 }
 
 function productById(id) {
@@ -130,7 +167,11 @@ function productById(id) {
 function render() {
   const actions = document.getElementById("top-actions");
   if (currentView === "inventory") {
-    actions.innerHTML = `<button class="btn sakura" id="add-product">Thêm sản phẩm</button>`;
+    actions.innerHTML = `
+      <button class="btn secondary" id="manage-cats">Quản lý nhóm</button>
+      <button class="btn sakura" id="add-product">Thêm sản phẩm</button>
+    `;
+    document.getElementById("manage-cats").onclick = () => categoryManager();
     document.getElementById("add-product").onclick = () => productForm();
     renderInventory();
   } else if (currentView === "orders") {
@@ -192,8 +233,7 @@ function renderInventory() {
       <input id="inv-q" class="search" placeholder="Tìm SKU, tên, thương hiệu..." value="${q}" />
       <select id="inv-cat">
         <option value="">Tất cả nhóm</option>
-        <option value="clothes" ${cat === "clothes" ? "selected" : ""}>Quần áo</option>
-        <option value="cosmetics" ${cat === "cosmetics" ? "selected" : ""}>Mỹ phẩm</option>
+        ${categoryOptions(cat)}
       </select>
     </div>
     ${
@@ -205,9 +245,9 @@ function renderInventory() {
           .map((p) => {
             const low = p.stock <= p.minStock;
             return `<tr>
-              <td>${p.sku}</td>
-              <td><strong>${p.name}</strong><br><span style="color:var(--muted)">${p.brand} · ${p.variant || "—"}</span></td>
-              <td><span class="badge">${CATEGORIES[p.category] || p.category}</span></td>
+              <td>${esc(p.sku)}</td>
+              <td><strong>${esc(p.name)}</strong><br><span style="color:var(--muted)">${esc(p.brand)} · ${esc(p.variant || "—")}</span></td>
+              <td><span class="badge">${esc(categoryName(p.category))}</span></td>
               <td><span class="badge ${low ? "low" : "ok"}">${p.stock}</span></td>
               <td>${money(p.price)}</td>
               <td class="row-actions">
@@ -233,11 +273,16 @@ function renderInventory() {
 }
 
 function productForm(id) {
+  if (!state.categories.length) {
+    toast("Thêm nhóm hàng trước");
+    categoryManager();
+    return;
+  }
   const p = id ? productById(id) : {
     sku: "",
     name: "",
     brand: "",
-    category: "clothes",
+    category: state.categories[0].id,
     variant: "",
     stock: 0,
     minStock: 3,
@@ -245,16 +290,15 @@ function productForm(id) {
   };
   openModal(id ? "Sửa sản phẩm" : "Thêm sản phẩm", `
     <form id="product-form" class="form-grid">
-      <label>SKU<input name="sku" required value="${p.sku || ""}" /></label>
+      <label>SKU<input name="sku" required value="${esc(p.sku || "")}" /></label>
       <label>Nhóm
-        <select name="category">
-          <option value="clothes" ${p.category === "clothes" ? "selected" : ""}>Quần áo</option>
-          <option value="cosmetics" ${p.category === "cosmetics" ? "selected" : ""}>Mỹ phẩm</option>
+        <select name="category" required>
+          ${state.categories.length ? categoryOptions(p.category) : `<option value="">Chưa có nhóm</option>`}
         </select>
       </label>
-      <label class="full">Tên sản phẩm<input name="name" required value="${p.name || ""}" /></label>
-      <label>Thương hiệu<input name="brand" value="${p.brand || ""}" /></label>
-      <label>Size / dung tích<input name="variant" value="${p.variant || ""}" placeholder="M / 170ml" /></label>
+      <label class="full">Tên sản phẩm<input name="name" required value="${esc(p.name || "")}" /></label>
+      <label>Thương hiệu<input name="brand" value="${esc(p.brand || "")}" /></label>
+      <label>Size / dung tích<input name="variant" value="${esc(p.variant || "")}" placeholder="M / 170ml" /></label>
       <label>Tồn kho<input name="stock" type="number" min="0" value="${p.stock || 0}" /></label>
       <label>Ngưỡng cảnh báo<input name="minStock" type="number" min="0" value="${p.minStock || 0}" /></label>
       <label>Giá bán (đ)<input name="price" type="number" min="0" value="${p.price || 0}" /></label>
@@ -282,6 +326,128 @@ function productForm(id) {
     save();
     closeModal();
     render();
+  };
+}
+
+function categoryManager() {
+  const rows = state.categories
+    .map((c) => {
+      const count = state.products.filter((p) => p.category === c.id).length;
+      return `<tr>
+        <td><strong>${esc(c.name)}</strong></td>
+        <td>${count} SP</td>
+        <td class="row-actions">
+          <button class="btn secondary" type="button" data-cat-edit="${esc(c.id)}">Sửa</button>
+          <button class="btn danger" type="button" data-cat-del="${esc(c.id)}">Xóa</button>
+        </td>
+      </tr>`;
+    })
+    .join("");
+
+  openModal("Quản lý nhóm", `
+    <form id="cat-add" class="toolbar">
+      <input name="name" class="search" required maxlength="40" placeholder="Tên nhóm mới, vd. Skincare" />
+      <button class="btn sakura" type="submit">Thêm nhóm</button>
+    </form>
+    ${
+      state.categories.length
+        ? `<table><thead><tr><th>Nhóm</th><th>Sản phẩm</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+        : `<div class="empty">Chưa có nhóm. Thêm nhóm trước khi nhập hàng.</div>`
+    }
+  `);
+
+  document.getElementById("cat-add").onsubmit = (e) => {
+    e.preventDefault();
+    const name = new FormData(e.target).get("name").trim();
+    if (!name) return;
+    if (state.categories.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
+      toast("Nhóm này đã có");
+      return;
+    }
+    state.categories.push({ id: uid("c"), name });
+    save();
+    toast("Đã thêm nhóm");
+    categoryManager();
+  };
+  document.querySelectorAll("[data-cat-edit]").forEach((b) => {
+    b.onclick = () => categoryEdit(b.dataset.catEdit);
+  });
+  document.querySelectorAll("[data-cat-del]").forEach((b) => {
+    b.onclick = () => categoryDelete(b.dataset.catDel);
+  });
+}
+
+function categoryEdit(id) {
+  const c = categoryById(id);
+  if (!c) return;
+  openModal("Sửa nhóm", `
+    <form id="cat-edit" class="form-grid">
+      <label class="full">Tên nhóm<input name="name" required maxlength="40" value="${esc(c.name)}" /></label>
+      <div class="form-actions full">
+        <button type="button" class="btn secondary" id="back-cats">Quay lại</button>
+        <button class="btn" type="submit">Lưu</button>
+      </div>
+    </form>
+  `);
+  document.getElementById("back-cats").onclick = () => categoryManager();
+  document.getElementById("cat-edit").onsubmit = (e) => {
+    e.preventDefault();
+    const name = new FormData(e.target).get("name").trim();
+    if (!name) return;
+    if (state.categories.some((x) => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) {
+      toast("Tên nhóm đã dùng");
+      return;
+    }
+    c.name = name;
+    save();
+    toast("Đã sửa nhóm");
+    categoryManager();
+  };
+}
+
+function categoryDelete(id) {
+  const c = categoryById(id);
+  if (!c) return;
+  const used = state.products.filter((p) => p.category === id);
+  const others = state.categories.filter((x) => x.id !== id);
+
+  if (!used.length) {
+    if (!confirm(`Xóa nhóm "${c.name}"?`)) return;
+    state.categories = others;
+    save();
+    toast("Đã xóa nhóm");
+    categoryManager();
+    return;
+  }
+
+  if (!others.length) {
+    toast("Không xóa được nhóm cuối khi còn sản phẩm");
+    return;
+  }
+
+  openModal("Xóa nhóm " + c.name, `
+    <p>${used.length} sản phẩm đang thuộc nhóm này. Chọn nhóm chuyển sang rồi xóa.</p>
+    <form id="cat-move" class="form-grid">
+      <label class="full">Chuyển sang
+        <select name="to">${others.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("")}</select>
+      </label>
+      <div class="form-actions full">
+        <button type="button" class="btn secondary" id="back-cats">Hủy</button>
+        <button class="btn danger" type="submit">Chuyển & xóa nhóm</button>
+      </div>
+    </form>
+  `);
+  document.getElementById("back-cats").onclick = () => categoryManager();
+  document.getElementById("cat-move").onsubmit = (e) => {
+    e.preventDefault();
+    const to = new FormData(e.target).get("to");
+    used.forEach((p) => {
+      p.category = to;
+    });
+    state.categories = state.categories.filter((x) => x.id !== id);
+    save();
+    toast("Đã xóa nhóm và chuyển sản phẩm");
+    categoryManager();
   };
 }
 
@@ -505,7 +671,7 @@ function importBackup(file) {
     try {
       const parsed = JSON.parse(reader.result);
       if (!Array.isArray(parsed.products) || !Array.isArray(parsed.orders)) throw new Error("bad");
-      state = { products: parsed.products, orders: parsed.orders };
+      state = normalizeState(parsed);
       save();
       toast("Đã nhập backup");
       render();
