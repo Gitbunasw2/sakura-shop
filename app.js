@@ -1,4 +1,4 @@
-const STORAGE_KEY = "sakura-shop-v2"; // Đổi key phiên bản để tự động làm mới bộ nhớ cũ
+const STORAGE_KEY = "sakura-shop-v3";
 
 const STATUSES = {
   new: "Mới",
@@ -11,17 +11,16 @@ const STATUSES = {
 let state = { products: [], orders: [], categories: [] };
 let currentView = "dashboard";
 
-// Bắt buộc load dữ liệu mới từ 2 file JSON ngoài
+// Tải dữ liệu từ 2 file JSON ngoài
 async function loadData() {
   try {
-    // Gọi song song store_data.json và order_data.json
     const [storeRes, orderRes] = await Promise.all([
       fetch('./store_data.json'),
       fetch('./order_data.json')
     ]);
     
     if (!storeRes.ok || !orderRes.ok) {
-      throw new Error("Không thể tải file JSON từ server.");
+      throw new Error("Không thể tải tệp JSON từ server.");
     }
 
     const storeData = await storeRes.json();
@@ -33,11 +32,9 @@ async function loadData() {
       orders: orderData.orders || []
     });
 
-    // Lưu lại trạng thái mới nhất vào localStorage để ghi nhận các thao tác tiếp theo trong phiên
     save();
   } catch (err) {
     console.error("Lỗi khi tải file JSON:", err);
-    // Nếu fetch lỗi (ví dụ do chạy file cục bộ), thử đọc từ localStorage cũ làm phòng hờ
     const rawLocal = localStorage.getItem(STORAGE_KEY);
     if (rawLocal) {
       state = normalizeState(JSON.parse(rawLocal));
@@ -588,7 +585,7 @@ function orderDetail(id) {
   }
 }
 
-// Chức năng tải xuống file data riêng biệt
+// === TÍNH NĂNG XUẤT / NHẬP RIÊNG BIỆT 2 FILE (STORE & ORDERS) ===
 function downloadJSON(data, filename) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
@@ -600,14 +597,70 @@ function downloadJSON(data, filename) {
 }
 
 function exportStoreData() {
-  downloadJSON({ categories: state.categories, products: state.products }, "store_data.json");
+  const storeData = {
+    categories: state.categories,
+    products: state.products
+  };
+  downloadJSON(storeData, "store_data.json");
 }
 
 function exportOrderData() {
-  downloadJSON({ orders: state.orders }, "order_data.json");
+  const orderData = {
+    orders: state.orders
+  };
+  downloadJSON(orderData, "order_data.json");
 }
 
-// Bắt đầu chạy ứng dụng bằng cách fetch dữ liệu từ file JSON
+function importDualFiles(event) {
+  const files = event.target.files;
+  if (!files || files.length === 0) return;
+
+  let loadedStore = null;
+  let loadedOrders = null;
+  let processedCount = 0;
+
+  Array.from(files).forEach((file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const parsed = JSON.parse(e.target.result);
+        if (parsed.products || parsed.categories) {
+          loadedStore = parsed;
+        } else if (parsed.orders) {
+          loadedOrders = parsed;
+        }
+      } catch (err) {
+        console.error("Lỗi đọc file JSON:", err);
+      }
+
+      processedCount++;
+      if (processedCount === files.length) {
+        if (!loadedStore && !loadedOrders) {
+          toast("Không nhận diện được định dạng file dữ liệu hợp lệ!");
+          return;
+        }
+
+        if (loadedStore) {
+          if (loadedStore.products) state.products = loadedStore.products;
+          if (loadedStore.categories) state.categories = loadedStore.categories;
+        }
+        if (loadedOrders) {
+          if (loadedOrders.orders) state.orders = loadedOrders.orders;
+        }
+
+        state = normalizeState(state);
+        save();
+        toast("Đã nhập thành công dữ liệu từ các file tải lên!");
+        render();
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  event.target.value = "";
+}
+
+// Khởi chạy hệ thống
 loadData();
 
 document.querySelectorAll(".nav-btn").forEach((btn) => {
@@ -617,3 +670,8 @@ document.getElementById("modal-close").onclick = closeModal;
 document.getElementById("modal").addEventListener("click", (e) => {
   if (e.target.id === "modal") closeModal();
 });
+
+// Gắn sự kiện cho các nút Xuất / Nhập backup 2 file nếu giao diện của bạn có sẵn các ID tương ứng
+document.getElementById("btn-export-store")?.addEventListener("click", exportStoreData);
+document.getElementById("btn-export-orders")?.addEventListener("click", exportOrderData);
+document.getElementById("input-import-dual")?.addEventListener("change", importDualFiles);
