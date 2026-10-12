@@ -1,9 +1,4 @@
-const STORAGE_KEY = "sakura-shop-v1";
-
-const DEFAULT_CATEGORIES = [
-  { id: "clothes", name: "Quần áo" },
-  { id: "cosmetics", name: "Mỹ phẩm" },
-];
+const STORAGE_KEY = "sakura-shop-v2"; // Đổi key phiên bản để tự động làm mới bộ nhớ cũ
 
 const STATUSES = {
   new: "Mới",
@@ -13,86 +8,57 @@ const STATUSES = {
   cancelled: "Đã hủy",
 };
 
-const seed = {
-  products: [
-    {
-      id: "p1",
-      sku: "QA-001",
-      name: "Áo cotton MUJI",
-      brand: "MUJI",
-      category: "clothes",
-      variant: "M / trắng",
-      stock: 12,
-      minStock: 4,
-      costPrice: 250000,
-      price: 390000,
-    },
-    {
-      id: "p2",
-      sku: "QA-002",
-      name: "Quần linen Uniqlo",
-      brand: "Uniqlo",
-      category: "clothes",
-      variant: "S / be",
-      stock: 3,
-      minStock: 3,
-      costPrice: 400000,
-      price: 590000,
-    },
-    {
-      id: "p3",
-      sku: "MP-001",
-      name: "Hada Labo Gokujyun Lotion",
-      brand: "Hada Labo",
-      category: "cosmetics",
-      variant: "170ml",
-      stock: 20,
-      minStock: 6,
-      costPrice: 160000,
-      price: 245000,
-    },
-    {
-      id: "p4",
-      sku: "MP-002",
-      name: "Senka Perfect Whip",
-      brand: "Shiseido",
-      category: "cosmetics",
-      variant: "120g",
-      stock: 2,
-      minStock: 5,
-      costPrice: 80000,
-      price: 129000,
-    },
-  ],
-  orders: [],
-  categories: structuredClone(DEFAULT_CATEGORIES),
-};
-
-let state = load();
+let state = { products: [], orders: [], categories: [] };
 let currentView = "dashboard";
 
-function load() {
+// Bắt buộc load dữ liệu mới từ 2 file JSON ngoài
+async function loadData() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return structuredClone(seed);
-    return normalizeState(JSON.parse(raw));
-  } catch {
-    return structuredClone(seed);
+    // Gọi song song store_data.json và order_data.json
+    const [storeRes, orderRes] = await Promise.all([
+      fetch('./store_data.json'),
+      fetch('./order_data.json')
+    ]);
+    
+    if (!storeRes.ok || !orderRes.ok) {
+      throw new Error("Không thể tải file JSON từ server.");
+    }
+
+    const storeData = await storeRes.json();
+    const orderData = await orderRes.json();
+
+    state = normalizeState({
+      products: storeData.products || [],
+      categories: storeData.categories || [],
+      orders: orderData.orders || []
+    });
+
+    // Lưu lại trạng thái mới nhất vào localStorage để ghi nhận các thao tác tiếp theo trong phiên
+    save();
+  } catch (err) {
+    console.error("Lỗi khi tải file JSON:", err);
+    // Nếu fetch lỗi (ví dụ do chạy file cục bộ), thử đọc từ localStorage cũ làm phòng hờ
+    const rawLocal = localStorage.getItem(STORAGE_KEY);
+    if (rawLocal) {
+      state = normalizeState(JSON.parse(rawLocal));
+    } else {
+      toast("Không tìm thấy tệp dữ liệu JSON nguồn!");
+    }
   }
+  render();
 }
 
 function normalizeState(parsed) {
   const products = parsed.products || [];
   const orders = parsed.orders || [];
   let categories = Array.isArray(parsed.categories) ? parsed.categories.filter((c) => c && c.id && c.name) : [];
-  if (!categories.length) categories = structuredClone(DEFAULT_CATEGORIES);
   const known = new Set(categories.map((c) => c.id));
+  
   products.forEach((p) => {
     if (p.category && !known.has(p.category)) {
       categories.push({ id: p.category, name: p.category });
       known.add(p.category);
     }
-    // Đảm bảo sản phẩm cũ nếu chưa có costPrice thì mặc định bằng 0
     if (p.costPrice === undefined) p.costPrice = 0;
   });
   return { products, orders, categories };
@@ -136,6 +102,7 @@ function money(n) {
 
 function toast(msg) {
   const el = document.getElementById("toast");
+  if (!el) return;
   el.textContent = msg;
   el.classList.remove("hidden");
   clearTimeout(toast._t);
@@ -172,6 +139,7 @@ function productById(id) {
 
 function render() {
   const actions = document.getElementById("top-actions");
+  if (!actions) return;
   if (currentView === "inventory") {
     actions.innerHTML = `
       <button class="btn secondary" id="manage-cats">Quản lý nhóm</button>
@@ -356,13 +324,13 @@ function categoryManager() {
 
   openModal("Quản lý nhóm", `
     <form id="cat-add" class="toolbar">
-      <input name="name" class="search" required maxlength="40" placeholder="Tên nhóm mới, vd. Skincare" />
+      <input name="name" class="search" required maxlength="40" placeholder="Tên nhóm mới..." />
       <button class="btn sakura" type="submit">Thêm nhóm</button>
     </form>
     ${
       state.categories.length
         ? `<table><thead><tr><th>Nhóm</th><th>Sản phẩm</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
-        : `<div class="empty">Chưa có nhóm. Thêm nhóm trước khi nhập hàng.</div>`
+        : `<div class="empty">Chưa có nhóm.</div>`
     }
   `);
 
@@ -404,10 +372,6 @@ function categoryEdit(id) {
     e.preventDefault();
     const name = new FormData(e.target).get("name").trim();
     if (!name) return;
-    if (state.categories.some((x) => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) {
-      toast("Tên nhóm đã dùng");
-      return;
-    }
     c.name = name;
     save();
     toast("Đã sửa nhóm");
@@ -430,11 +394,6 @@ function categoryDelete(id) {
     return;
   }
 
-  if (!others.length) {
-    toast("Không xóa được nhóm cuối khi còn sản phẩm");
-    return;
-  }
-
   openModal("Xóa nhóm " + c.name, `
     <p>${used.length} sản phẩm đang thuộc nhóm này. Chọn nhóm chuyển sang rồi xóa.</p>
     <form id="cat-move" class="form-grid">
@@ -451,12 +410,10 @@ function categoryDelete(id) {
   document.getElementById("cat-move").onsubmit = (e) => {
     e.preventDefault();
     const to = new FormData(e.target).get("to");
-    used.forEach((p) => {
-      p.category = to;
-    });
-    state.categories = state.categories.filter((x) => x.id !== id);
+    used.forEach((p) => { p.category = to; });
+    state.categories = others;
     save();
-    toast("Đã xóa nhóm và chuyển sản phẩm");
+    toast("Đã chuyển sản phẩm và xóa nhóm");
     categoryManager();
   };
 }
@@ -484,9 +441,7 @@ function renderOrders() {
       <input id="ord-q" class="search" placeholder="Tìm mã đơn, khách, SĐT..." value="${q}" />
       <select id="ord-st">
         <option value="">Mọi trạng thái</option>
-        ${Object.entries(STATUSES)
-          .map(([k, v]) => `<option value="${k}" ${st === k ? "selected" : ""}>${v}</option>`)
-          .join("")}
+        ${Object.entries(STATUSES).map(([k, v]) => `<option value="${k}" ${st === k ? "selected" : ""}>${v}</option>`).join("")}
       </select>
     </div>
     ${
@@ -494,21 +449,17 @@ function renderOrders() {
         ? `<table><thead><tr>
           <th>Mã</th><th>Khách</th><th>Món</th><th>Tổng</th><th>Trạng thái</th><th></th>
         </tr></thead><tbody>
-        ${rows
-          .map((o) => {
-            const count = o.items.reduce((s, i) => s + i.qty, 0);
-            return `<tr>
-              <td>${o.code}</td>
-              <td><strong>${o.customerName}</strong><br><span style="color:var(--muted)">${o.customerPhone || ""}</span></td>
-              <td>${count} sp</td>
-              <td>${money(o.total)}</td>
-              <td><span class="badge status-${o.status}">${STATUSES[o.status]}</span></td>
-              <td class="row-actions">
-                <button class="btn secondary" data-view-order="${o.id}">Chi tiết</button>
-              </td>
-            </tr>`;
-          })
-          .join("")}
+        ${rows.map((o) => {
+          const count = o.items.reduce((s, i) => s + i.qty, 0);
+          return `<tr>
+            <td>${o.code}</td>
+            <td><strong>${o.customerName}</strong><br><span style="color:var(--muted)">${o.customerPhone || ""}</span></td>
+            <td>${count} sp</td>
+            <td>${money(o.total)}</td>
+            <td><span class="badge status-${o.status}">${STATUSES[o.status]}</span></td>
+            <td class="row-actions"><button class="btn secondary" data-view-order="${o.id}">Chi tiết</button></td>
+          </tr>`;
+        }).join("")}
         </tbody></table>`
         : `<div class="card empty">Chưa có đơn hàng.</div>`
     }
@@ -549,9 +500,7 @@ function orderForm() {
 }
 
 function productOptions() {
-  return state.products
-    .map((p) => `<option value="${p.id}">${p.sku} — ${p.name} (tồn ${p.stock})</option>`)
-    .join("");
+  return state.products.map((p) => `<option value="${p.id}">${p.sku} — ${p.name} (tồn ${p.stock})</option>`).join("");
 }
 
 function addLine() {
@@ -561,7 +510,6 @@ function addLine() {
   row.innerHTML = `
     <select name="pid">${productOptions()}</select>
     <input name="qty" type="number" min="1" value="1" />
-    <span class="muted-price"></span>
     <button type="button" class="btn danger rm">X</button>
   `;
   row.querySelector(".rm").onclick = () => row.remove();
@@ -572,30 +520,18 @@ function submitOrder(e) {
   e.preventDefault();
   const fd = new FormData(e.target);
   const lines = [...document.querySelectorAll("#lines .line")];
-  if (!lines.length) {
-    toast("Thêm ít nhất 1 sản phẩm");
-    return;
-  }
+  if (!lines.length) return toast("Thêm ít nhất 1 sản phẩm");
 
   const items = [];
   for (const line of lines) {
     const pid = line.querySelector("[name=pid]").value;
     const qty = Number(line.querySelector("[name=qty]").value);
     const p = productById(pid);
-    if (!p || qty < 1) {
-      toast("Dòng hàng không hợp lệ");
-      return;
-    }
-    if (qty > p.stock) {
-      toast(`${p.name} chỉ còn ${p.stock}`);
-      return;
-    }
+    if (!p || qty < 1 || qty > p.stock) return toast("Số lượng không hợp lệ hoặc vượt tồn kho");
     items.push({ productId: p.id, name: p.name, sku: p.sku, qty, price: p.price });
   }
 
-  for (const item of items) {
-    productById(item.productId).stock -= item.qty;
-  }
+  items.forEach(i => { productById(i.productId).stock -= i.qty; });
 
   const order = {
     id: uid("o"),
@@ -618,79 +554,61 @@ function submitOrder(e) {
 function orderDetail(id) {
   const o = state.orders.find((x) => x.id === id);
   if (!o) return;
-  const canCancel = o.status !== "cancelled" && o.status !== "done";
   openModal("Đơn " + o.code, `
     <p><strong>${o.customerName}</strong> · ${o.customerPhone || "—"}</p>
-    <p style="color:var(--muted)">${o.note || ""}</p>
     <table><thead><tr><th>SP</th><th>SL</th><th>Giá</th></tr></thead>
-    <tbody>
-      ${o.items
-        .map((i) => `<tr><td>${i.sku}${i.name}</td><td>${i.qty}</td><td>${money(i.qty * i.price)}</td></tr>`)
-        .join("")}
-    </tbody></table>
+    <tbody>${o.items.map((i) => `<tr><td>${i.sku}${i.name}</td><td>${i.qty}</td><td>${money(i.qty * i.price)}</td></tr>`).join("")}</tbody></table>
     <p style="margin-top:12px"><strong>Tổng: ${money(o.total)}</strong></p>
     <label>Trạng thái
       <select id="st-change" ${o.status === "cancelled" ? "disabled" : ""}>
-        ${Object.entries(STATUSES)
-          .filter(([k]) => k !== "cancelled")
-          .map(([k, v]) => `<option value="${k}" ${o.status === k ? "selected" : ""}>${v}</option>`)
-          .join("")}
+        ${Object.entries(STATUSES).filter(([k]) => k !== "cancelled").map(([k, v]) => `<option value="${k}" ${o.status === k ? "selected" : ""}>${v}</option>`).join("")}
       </select>
     </label>
     <div class="form-actions">
-      ${canCancel ? `<button class="btn danger" id="cancel-order">Hủy đơn (hoàn kho)</button>` : ""}
+      ${o.status !== "cancelled" && o.status !== "done" ? `<button class="btn danger" id="cancel-order">Hủy đơn (hoàn kho)</button>` : ""}
       <button class="btn" id="save-st">Lưu trạng thái</button>
     </div>
   `);
   document.getElementById("save-st").onclick = () => {
-    if (o.status === "cancelled") return;
     o.status = document.getElementById("st-change").value;
     save();
     closeModal();
-    toast("Đã cập nhật trạng thái");
     render();
   };
   const cancelBtn = document.getElementById("cancel-order");
   if (cancelBtn) {
     cancelBtn.onclick = () => {
       if (!confirm("Hủy đơn và hoàn kho?")) return;
-      o.items.forEach((i) => {
-        const p = productById(i.productId);
-        if (p) p.stock += i.qty;
-      });
+      o.items.forEach((i) => { const p = productById(i.productId); if (p) p.stock += i.qty; });
       o.status = "cancelled";
       save();
       closeModal();
-      toast("Đã hủy đơn, hoàn kho");
       render();
     };
   }
 }
 
-function exportBackup() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+// Chức năng tải xuống file data riêng biệt
+function downloadJSON(data, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "sakura-shop-backup.json";
+  a.download = filename;
   a.click();
+  URL.revokeObjectURL(a.href);
+  toast("Đã tải xuống " + filename);
 }
 
-function importBackup(file) {
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const parsed = JSON.parse(reader.result);
-      if (!Array.isArray(parsed.products) || !Array.isArray(parsed.orders)) throw new Error("bad");
-      state = normalizeState(parsed);
-      save();
-      toast("Đã nhập backup");
-      render();
-    } catch {
-      toast("File backup không hợp lệ");
-    }
-  };
-  reader.readAsText(file);
+function exportStoreData() {
+  downloadJSON({ categories: state.categories, products: state.products }, "store_data.json");
 }
+
+function exportOrderData() {
+  downloadJSON({ orders: state.orders }, "order_data.json");
+}
+
+// Bắt đầu chạy ứng dụng bằng cách fetch dữ liệu từ file JSON
+loadData();
 
 document.querySelectorAll(".nav-btn").forEach((btn) => {
   btn.onclick = () => setView(btn.dataset.view);
@@ -699,11 +617,3 @@ document.getElementById("modal-close").onclick = closeModal;
 document.getElementById("modal").addEventListener("click", (e) => {
   if (e.target.id === "modal") closeModal();
 });
-document.getElementById("btn-export").onclick = exportBackup;
-document.getElementById("input-import").onchange = (e) => {
-  const file = e.target.files[0];
-  if (file) importBackup(file);
-  e.target.value = "";
-};
-
-render();
