@@ -1,0 +1,30 @@
+{
+    "orders": [
+      {
+        "id": "oa1b2c3",
+        "code": "DH0001",
+        "customerName": "Trần Thị Mai",
+        "customerPhone": "0987654321",
+        "note": "Giao giờ hành chính giúp mình nhé",
+        "items": [
+          {
+            "productId": "p1",
+            "name": "Áo cotton MUJI",
+            "sku": "QA-001",
+            "qty": 2,
+            "price": 390000
+          },
+          {
+            "productId": "p3",
+            "name": "Hada Labo Gokujyun Lotion",
+            "sku": "MP-001",
+            "qty": 1,
+            "price": 245000
+          }
+        ],
+        "status": "confirmed",
+        "total": 1025000,
+        "createdAt": 1776043200000
+      }
+    ]
+  }
