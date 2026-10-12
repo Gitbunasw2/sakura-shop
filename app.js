@@ -11,14 +11,26 @@ const STATUSES = {
 let state = { products: [], orders: [], categories: [] };
 let currentView = "dashboard";
 
-// Tải dữ liệu từ 2 file JSON ngoài
+// Tải dữ liệu: ưu tiên localStorage để dữ liệu mới không bị mất khi reload
 async function loadData() {
+  const rawLocal = localStorage.getItem(STORAGE_KEY);
+  if (rawLocal) {
+    try {
+      state = normalizeState(JSON.parse(rawLocal));
+      render();
+      return;
+    } catch (err) {
+      console.error("Lỗi khi đọc localStorage:", err);
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }
+
   try {
     const [storeRes, orderRes] = await Promise.all([
       fetch('./store_data.json'),
       fetch('./order_data.json')
     ]);
-    
+
     if (!storeRes.ok || !orderRes.ok) {
       throw new Error("Không thể tải tệp JSON từ server.");
     }
@@ -35,7 +47,6 @@ async function loadData() {
     save();
   } catch (err) {
     console.error("Lỗi khi tải file JSON:", err);
-    const rawLocal = localStorage.getItem(STORAGE_KEY);
     if (rawLocal) {
       state = normalizeState(JSON.parse(rawLocal));
     } else {

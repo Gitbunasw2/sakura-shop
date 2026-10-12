@@ -75,54 +75,6 @@
         "minStock": 6,
         "costPrice": 160000,
         "price": 245000
-      },
-      {
-        "id": "p7",
-        "sku": "MP-002",
-        "name": "Senka Perfect Whip",
-        "brand": "Shiseido",
-        "category": "cosmetics",
-        "variant": "120g",
-        "stock": 2,
-        "minStock": 5,
-        "costPrice": 80000,
-        "price": 129000
-      },
-      {
-        "id": "p8",
-        "sku": "MP-003",
-        "name": "Nước hoa hồng Melano CC",
-        "brand": "Rohto",
-        "category": "cosmetics",
-        "variant": "170ml",
-        "stock": 14,
-        "minStock": 4,
-        "costPrice": 190000,
-        "price": 285000
-      },
-      {
-        "id": "p9",
-        "sku": "MP-004",
-        "name": "Kem chống nắng Anessa Perfect UV",
-        "brand": "Shiseido",
-        "category": "cosmetics",
-        "variant": "60ml",
-        "stock": 10,
-        "minStock": 3,
-        "costPrice": 380000,
-        "price": 550000
-      },
-      {
-        "id": "p10",
-        "sku": "MP-005",
-        "name": "Mặt nạ Keana Rice Mask",
-        "brand": "Ishizawa",
-        "category": "cosmetics",
-        "variant": "Gói 10 miếng",
-        "stock": 25,
-        "minStock": 8,
-        "costPrice": 120000,
-        "price": 195000
       }
     ]
   }
