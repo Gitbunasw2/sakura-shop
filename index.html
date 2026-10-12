@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sakura Shop — Kho & đơn hàng</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">桜</span>
+        <div>
+          <strong>Sakura Shop</strong>
+          <small>Kho · Đơn hàng</small>
+        </div>
+      </div>
+      <nav>
+        <button class="nav-btn active" data-view="dashboard">Tổng quan</button>
+        <button class="nav-btn" data-view="inventory">Kho hàng</button>
+        <button class="nav-btn" data-view="orders">Đơn hàng</button>
+      </nav>
+      <div class="sidebar-foot">
+        <button id="btn-export" class="ghost">Xuất backup</button>
+        <label class="ghost file-label">
+          Nhập backup
+          <input id="input-import" type="file" accept="application/json" hidden />
+        </label>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <h1 id="page-title">Tổng quan</h1>
+        <div class="top-actions" id="top-actions"></div>
+      </header>
+
+      <section id="view-dashboard" class="view"></section>
+      <section id="view-inventory" class="view hidden"></section>
+      <section id="view-orders" class="view hidden"></section>
+    </main>
+
+    <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h2 id="modal-title"></h2>
+          <button id="modal-close" class="icon-btn" aria-label="Đóng">×</button>
+        </div>
+        <div id="modal-body"></div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
