@@ -68,6 +68,9 @@ function normalizeState(parsed) {
       known.add(p.category);
     }
     if (p.costPrice === undefined) p.costPrice = 0;
+    if (p.costPriceJpy === undefined) p.costPriceJpy = Number(Math.round((p.costPrice || 0) / 180));
+    if (p.weight === undefined) p.weight = 0;
+    if (p.shippingFee === undefined) p.shippingFee = 0;
   });
   return { products, orders, categories };
 }
@@ -106,6 +109,14 @@ function uid(prefix) {
 
 function money(n) {
   return new Intl.NumberFormat("vi-VN").format(n || 0) + " đ";
+}
+
+function moneyJpy(n) {
+  return new Intl.NumberFormat("ja-JP", {
+    style: "currency",
+    currency: "JPY",
+    maximumFractionDigits: 0
+  }).format(n || 0);
 }
 
 function toast(msg) {
@@ -221,7 +232,7 @@ function renderInventory() {
     ${
       rows.length
         ? `<table><thead><tr>
-          <th>SKU</th><th>Sản phẩm</th><th>Nhóm</th><th>Tồn</th><th>Giá gốc</th><th>Giá bán</th><th></th>
+          <th>SKU</th><th>Sản phẩm</th><th>Nhóm</th><th>Tồn</th><th>Giá gốc JPY</th><th>Giá gốc VNĐ</th><th>Trọng lượng</th><th>Phí vận chuyển</th><th>Giá bán</th><th></th>
         </tr></thead><tbody>
         ${rows
           .map((p) => {
@@ -231,7 +242,10 @@ function renderInventory() {
               <td><strong>${esc(p.name)}</strong><br><span style="color:var(--muted)">${esc(p.brand)} · ${esc(p.variant || "—")}</span></td>
               <td><span class="badge">${esc(categoryName(p.category))}</span></td>
               <td><span class="badge ${low ? "low" : "ok"}">${p.stock}</span></td>
+              <td>${moneyJpy(p.costPriceJpy)}</td>
               <td>${money(p.costPrice)}</td>
+              <td>${Number(p.weight || 0)} kg</td>
+              <td>${money(p.shippingFee || 0)}</td>
               <td>${money(p.price)}</td>
               <td class="row-actions">
                 <button class="btn secondary" data-edit="${p.id}">Sửa</button>
@@ -270,6 +284,9 @@ function productForm(id) {
     stock: 0,
     minStock: 3,
     costPrice: 0,
+    costPriceJpy: 0,
+    weight: 0,
+    shippingFee: 0,
     price: 0,
   };
   openModal(id ? "Sửa sản phẩm" : "Thêm sản phẩm", `
@@ -285,7 +302,10 @@ function productForm(id) {
       <label>Size / dung tích<input name="variant" value="${esc(p.variant || "")}" placeholder="M / 170ml" /></label>
       <label>Tồn kho<input name="stock" type="number" min="0" value="${p.stock || 0}" /></label>
       <label>Ngưỡng cảnh báo<input name="minStock" type="number" min="0" value="${p.minStock || 0}" /></label>
-      <label>Giá gốc (đ)<input name="costPrice" type="number" min="0" value="${p.costPrice || 0}" /></label>
+      <label>Giá gốc VNĐ<input name="costPrice" type="number" min="0" value="${p.costPrice || 0}" /></label>
+      <label>Giá gốc JPY<input name="costPriceJpy" type="number" min="0" value="${p.costPriceJpy || 0}" /></label>
+      <label>Trọng lượng (kg)<input name="weight" type="number" min="0" step="0.1" value="${p.weight || 0}" /></label>
+      <label>Phí vận chuyển (đ)<input name="shippingFee" type="number" min="0" value="${p.shippingFee || 0}" /></label>
       <label>Giá bán (đ)<input name="price" type="number" min="0" value="${p.price || 0}" /></label>
       <div class="form-actions full">
         <button type="button" class="btn secondary" id="cancel-modal">Hủy</button>
@@ -301,6 +321,9 @@ function productForm(id) {
     data.stock = Number(data.stock);
     data.minStock = Number(data.minStock);
     data.costPrice = Number(data.costPrice);
+    data.costPriceJpy = Number(data.costPriceJpy);
+    data.weight = Number(data.weight);
+    data.shippingFee = Number(data.shippingFee);
     data.price = Number(data.price);
     if (id) {
       Object.assign(productById(id), data);

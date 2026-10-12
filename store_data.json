@@ -14,6 +14,9 @@
         "stock": 12,
         "minStock": 4,
         "costPrice": 250000,
+        "costPriceJpy": 2200,
+        "weight": 0.4,
+        "shippingFee": 35000,
         "price": 390000
       },
       {
@@ -26,6 +29,9 @@
         "stock": 3,
         "minStock": 3,
         "costPrice": 400000,
+        "costPriceJpy": 3300,
+        "weight": 0.6,
+        "shippingFee": 42000,
         "price": 590000
       },
       {
@@ -38,6 +44,9 @@
         "stock": 15,
         "minStock": 5,
         "costPrice": 450000,
+        "costPriceJpy": 3800,
+        "weight": 0.7,
+        "shippingFee": 45000,
         "price": 690000
       },
       {
@@ -50,6 +59,9 @@
         "stock": 8,
         "minStock": 3,
         "costPrice": 320000,
+        "costPriceJpy": 2600,
+        "weight": 0.5,
+        "shippingFee": 39000,
         "price": 480000
       },
       {
@@ -62,6 +74,9 @@
         "stock": 20,
         "minStock": 5,
         "costPrice": 180000,
+        "costPriceJpy": 1500,
+        "weight": 0.3,
+        "shippingFee": 28000,
         "price": 290000
       },
       {
@@ -74,6 +89,9 @@
         "stock": 20,
         "minStock": 6,
         "costPrice": 160000,
+        "costPriceJpy": 1400,
+        "weight": 0.2,
+        "shippingFee": 25000,
         "price": 245000
       }
     ]
