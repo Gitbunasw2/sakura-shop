@@ -24,6 +24,7 @@ const seed = {
       variant: "M / trắng",
       stock: 12,
       minStock: 4,
+      costPrice: 250000,
       price: 390000,
     },
     {
@@ -35,6 +36,7 @@ const seed = {
       variant: "S / be",
       stock: 3,
       minStock: 3,
+      costPrice: 400000,
       price: 590000,
     },
     {
@@ -46,6 +48,7 @@ const seed = {
       variant: "170ml",
       stock: 20,
       minStock: 6,
+      costPrice: 160000,
       price: 245000,
     },
     {
@@ -57,6 +60,7 @@ const seed = {
       variant: "120g",
       stock: 2,
       minStock: 5,
+      costPrice: 80000,
       price: 129000,
     },
   ],
@@ -88,6 +92,8 @@ function normalizeState(parsed) {
       categories.push({ id: p.category, name: p.category });
       known.add(p.category);
     }
+    // Đảm bảo sản phẩm cũ nếu chưa có costPrice thì mặc định bằng 0
+    if (p.costPrice === undefined) p.costPrice = 0;
   });
   return { products, orders, categories };
 }
@@ -239,7 +245,7 @@ function renderInventory() {
     ${
       rows.length
         ? `<table><thead><tr>
-          <th>SKU</th><th>Sản phẩm</th><th>Nhóm</th><th>Tồn</th><th>Giá bán</th><th></th>
+          <th>SKU</th><th>Sản phẩm</th><th>Nhóm</th><th>Tồn</th><th>Giá gốc</th><th>Giá bán</th><th></th>
         </tr></thead><tbody>
         ${rows
           .map((p) => {
@@ -249,6 +255,7 @@ function renderInventory() {
               <td><strong>${esc(p.name)}</strong><br><span style="color:var(--muted)">${esc(p.brand)} · ${esc(p.variant || "—")}</span></td>
               <td><span class="badge">${esc(categoryName(p.category))}</span></td>
               <td><span class="badge ${low ? "low" : "ok"}">${p.stock}</span></td>
+              <td>${money(p.costPrice)}</td>
               <td>${money(p.price)}</td>
               <td class="row-actions">
                 <button class="btn secondary" data-edit="${p.id}">Sửa</button>
@@ -286,6 +293,7 @@ function productForm(id) {
     variant: "",
     stock: 0,
     minStock: 3,
+    costPrice: 0,
     price: 0,
   };
   openModal(id ? "Sửa sản phẩm" : "Thêm sản phẩm", `
@@ -301,6 +309,7 @@ function productForm(id) {
       <label>Size / dung tích<input name="variant" value="${esc(p.variant || "")}" placeholder="M / 170ml" /></label>
       <label>Tồn kho<input name="stock" type="number" min="0" value="${p.stock || 0}" /></label>
       <label>Ngưỡng cảnh báo<input name="minStock" type="number" min="0" value="${p.minStock || 0}" /></label>
+      <label>Giá gốc (đ)<input name="costPrice" type="number" min="0" value="${p.costPrice || 0}" /></label>
       <label>Giá bán (đ)<input name="price" type="number" min="0" value="${p.price || 0}" /></label>
       <div class="form-actions full">
         <button type="button" class="btn secondary" id="cancel-modal">Hủy</button>
@@ -315,6 +324,7 @@ function productForm(id) {
     const data = Object.fromEntries(fd.entries());
     data.stock = Number(data.stock);
     data.minStock = Number(data.minStock);
+    data.costPrice = Number(data.costPrice);
     data.price = Number(data.price);
     if (id) {
       Object.assign(productById(id), data);
@@ -615,7 +625,7 @@ function orderDetail(id) {
     <table><thead><tr><th>SP</th><th>SL</th><th>Giá</th></tr></thead>
     <tbody>
       ${o.items
-        .map((i) => `<tr><td>${i.sku} ${i.name}</td><td>${i.qty}</td><td>${money(i.qty * i.price)}</td></tr>`)
+        .map((i) => `<tr><td>${i.sku}${i.name}</td><td>${i.qty}</td><td>${money(i.qty * i.price)}</td></tr>`)
         .join("")}
     </tbody></table>
     <p style="margin-top:12px"><strong>Tổng: ${money(o.total)}</strong></p>
