@@ -611,6 +611,74 @@ function exportOrderData() {
   downloadJSON(orderData, "order_data.json");
 }
 
+function exportBackupBundle() {
+  exportStoreData();
+  setTimeout(() => exportOrderData(), 150);
+}
+
+function openImportBackupModal() {
+  openModal("Nhập backup", `
+    <form id="backup-import-form" class="form-grid">
+      <label class="full">
+        File store_data.json
+        <input id="backup-store-file" type="file" accept=".json,application/json" required />
+      </label>
+      <label class="full">
+        File order_data.json
+        <input id="backup-order-file" type="file" accept=".json,application/json" required />
+      </label>
+      <div class="form-actions full">
+        <button type="button" class="btn secondary" id="cancel-modal">Hủy</button>
+        <button class="btn" type="submit">Nhập dữ liệu</button>
+      </div>
+    </form>
+  `);
+
+  document.getElementById("cancel-modal").onclick = closeModal;
+  document.getElementById("backup-import-form").onsubmit = async (e) => {
+    e.preventDefault();
+
+    const storeFile = document.getElementById("backup-store-file").files[0];
+    const orderFile = document.getElementById("backup-order-file").files[0];
+
+    if (!storeFile || !orderFile) {
+      toast("Vui lòng chọn cả 2 file store_data.json và order_data.json");
+      return;
+    }
+
+    try {
+      const [storeText, orderText] = await Promise.all([
+        storeFile.text(),
+        orderFile.text(),
+      ]);
+
+      const storeData = JSON.parse(storeText);
+      const orderData = JSON.parse(orderText);
+
+      if (!(storeData && (storeData.products || storeData.categories))) {
+        throw new Error("File store không đúng định dạng");
+      }
+      if (!(orderData && orderData.orders)) {
+        throw new Error("File order không đúng định dạng");
+      }
+
+      state = normalizeState({
+        products: storeData.products || [],
+        categories: storeData.categories || [],
+        orders: orderData.orders || []
+      });
+
+      save();
+      closeModal();
+      toast("Đã nhập backup thành công!");
+      render();
+    } catch (err) {
+      console.error("Lỗi nhập backup:", err);
+      toast("File backup không hợp lệ hoặc sai định dạng");
+    }
+  };
+}
+
 function importDualFiles(event) {
   const files = event.target.files;
   if (!files || files.length === 0) return;
@@ -671,7 +739,10 @@ document.getElementById("modal").addEventListener("click", (e) => {
   if (e.target.id === "modal") closeModal();
 });
 
-// Gắn sự kiện cho các nút Xuất / Nhập backup 2 file nếu giao diện của bạn có sẵn các ID tương ứng
+document.getElementById("btn-export")?.addEventListener("click", exportBackupBundle);
+document.getElementById("btn-import")?.addEventListener("click", openImportBackupModal);
+
+// Backward compatibility if older markup still exists
 document.getElementById("btn-export-store")?.addEventListener("click", exportStoreData);
 document.getElementById("btn-export-orders")?.addEventListener("click", exportOrderData);
 document.getElementById("input-import-dual")?.addEventListener("change", importDualFiles);
