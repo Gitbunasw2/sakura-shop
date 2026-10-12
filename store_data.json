@@ -1,0 +1,128 @@
+{
+    "categories": [
+      { "id": "clothes", "name": "Quần áo" },
+      { "id": "cosmetics", "name": "Mỹ phẩm" }
+    ],
+    "products": [
+      {
+        "id": "p1",
+        "sku": "QA-001",
+        "name": "Áo cotton MUJI",
+        "brand": "MUJI",
+        "category": "clothes",
+        "variant": "M / trắng",
+        "stock": 12,
+        "minStock": 4,
+        "costPrice": 250000,
+        "price": 390000
+      },
+      {
+        "id": "p2",
+        "sku": "QA-002",
+        "name": "Quần linen Uniqlo",
+        "brand": "Uniqlo",
+        "category": "clothes",
+        "variant": "S / be",
+        "stock": 3,
+        "minStock": 3,
+        "costPrice": 400000,
+        "price": 590000
+      },
+      {
+        "id": "p3",
+        "sku": "QA-003",
+        "name": "Áo khoác chống nắng Airism",
+        "brand": "Uniqlo",
+        "category": "clothes",
+        "variant": "L / xám",
+        "stock": 15,
+        "minStock": 5,
+        "costPrice": 450000,
+        "price": 690000
+      },
+      {
+        "id": "p4",
+        "sku": "QA-004",
+        "name": "Váy midi dáng suông",
+        "brand": "GU",
+        "category": "clothes",
+        "variant": "M / đen",
+        "stock": 8,
+        "minStock": 3,
+        "costPrice": 320000,
+        "price": 480000
+      },
+      {
+        "id": "p5",
+        "sku": "QA-005",
+        "name": "Áo thun giữ nhiệt Heattech",
+        "brand": "Uniqlo",
+        "category": "clothes",
+        "variant": "S / hồng",
+        "stock": 20,
+        "minStock": 5,
+        "costPrice": 180000,
+        "price": 290000
+      },
+      {
+        "id": "p6",
+        "sku": "MP-001",
+        "name": "Hada Labo Gokujyun Lotion",
+        "brand": "Hada Labo",
+        "category": "cosmetics",
+        "variant": "170ml",
+        "stock": 20,
+        "minStock": 6,
+        "costPrice": 160000,
+        "price": 245000
+      },
+      {
+        "id": "p7",
+        "sku": "MP-002",
+        "name": "Senka Perfect Whip",
+        "brand": "Shiseido",
+        "category": "cosmetics",
+        "variant": "120g",
+        "stock": 2,
+        "minStock": 5,
+        "costPrice": 80000,
+        "price": 129000
+      },
+      {
+        "id": "p8",
+        "sku": "MP-003",
+        "name": "Nước hoa hồng Melano CC",
+        "brand": "Rohto",
+        "category": "cosmetics",
+        "variant": "170ml",
+        "stock": 14,
+        "minStock": 4,
+        "costPrice": 190000,
+        "price": 285000
+      },
+      {
+        "id": "p9",
+        "sku": "MP-004",
+        "name": "Kem chống nắng Anessa Perfect UV",
+        "brand": "Shiseido",
+        "category": "cosmetics",
+        "variant": "60ml",
+        "stock": 10,
+        "minStock": 3,
+        "costPrice": 380000,
+        "price": 550000
+      },
+      {
+        "id": "p10",
+        "sku": "MP-005",
+        "name": "Mặt nạ Keana Rice Mask",
+        "brand": "Ishizawa",
+        "category": "cosmetics",
+        "variant": "Gói 10 miếng",
+        "stock": 25,
+        "minStock": 8,
+        "costPrice": 120000,
+        "price": 195000
+      }
+    ]
+  }
