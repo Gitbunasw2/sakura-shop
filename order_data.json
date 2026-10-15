@@ -1,30 +1,215 @@
 {
-    "orders": [
-      {
-        "id": "oa1b2c3",
-        "code": "DH0001",
-        "customerName": "Trần Thị Mai",
-        "customerPhone": "0987654321",
-        "note": "Giao giờ hành chính giúp mình nhé",
-        "items": [
-          {
-            "productId": "p1",
-            "name": "Áo cotton MUJI",
-            "sku": "QA-001",
-            "qty": 2,
-            "price": 390000
-          },
-          {
-            "productId": "p3",
-            "name": "Hada Labo Gokujyun Lotion",
-            "sku": "MP-001",
-            "qty": 1,
-            "price": 245000
-          }
-        ],
-        "status": "confirmed",
-        "total": 1025000,
-        "createdAt": 1776043200000
-      }
-    ]
-  }
+  "orders": [
+    {
+      "id": "olddp0dpsct",
+      "code": "DH0007",
+      "customerName": "IG:nguyentranviettt",
+      "customerPhone": "0862321806",
+      "customerAddress": "Toà nhà BRG, 198 Trần Quang Khải, Hoàn Kiếm, Hà Nội",
+      "shippingCarrier": "",
+      "trackingNumber": "",
+      "note": "\"Nguyễn Văn Việt\nĐịa chỉ: Toà nhà BRG, 198 Trần Quang Khải, Hoàn Kiếm, Hà Nội\nSDT: 0862321806\"",
+      "items": [
+        {
+          "productId": "p9o6n8vrcu4",
+          "name": "Quần culottes",
+          "sku": "UNI-0011",
+          "qty": 1,
+          "price": 465000,
+          "costPrice": 330340,
+          "productShippingFee": 96000,
+          "packagingFee": 3000
+        }
+      ],
+      "shippingFee": 20000,
+      "shippingPayer": "customer",
+      "status": "deposited",
+      "depositAmount": 50000,
+      "total": 485000,
+      "createdAt": 1792040400000
+    },
+    {
+      "id": "oz7ledcnz0i",
+      "code": "DH0006",
+      "customerName": "Thread: hud_jr",
+      "customerPhone": "0345448883",
+      "customerAddress": "tiểu khu 39 cò nòi mai sơn sơn la",
+      "shippingCarrier": "",
+      "trackingNumber": "",
+      "note": "NGUYEN DAC HUAN\n0345448883\ntiểu khu 39 cò nòi mai sơn sơn la",
+      "items": [
+        {
+          "productId": "pyucx4v8i63",
+          "name": "Áo khoác blue",
+          "sku": "UNI-0006",
+          "qty": 1,
+          "price": 685000,
+          "costPrice": 496340,
+          "productShippingFee": 127000,
+          "packagingFee": 3000
+        }
+      ],
+      "shippingFee": 20000,
+      "shippingPayer": "customer",
+      "status": "deposited",
+      "depositAmount": 50000,
+      "total": 705000,
+      "createdAt": 1791954000000
+    },
+    {
+      "id": "obkbskjjyht",
+      "code": "DH0005",
+      "customerName": "Thread: mellifluosavr",
+      "customerPhone": "",
+      "customerAddress": "",
+      "shippingCarrier": "",
+      "trackingNumber": "",
+      "note": "",
+      "items": [
+        {
+          "productId": "p2",
+          "name": "Giày GU",
+          "sku": "GU-0002",
+          "qty": 1,
+          "price": 285000,
+          "costPrice": 164340,
+          "productShippingFee": 80500,
+          "packagingFee": 3000
+        }
+      ],
+      "shippingFee": 20000,
+      "shippingPayer": "customer",
+      "status": "deposited",
+      "depositAmount": 50000,
+      "total": 305000,
+      "createdAt": 1792040400000
+    },
+    {
+      "id": "ogenogfhk0b",
+      "code": "DH0004",
+      "customerName": "IG: Jingyin",
+      "customerPhone": "",
+      "customerAddress": "",
+      "shippingCarrier": "",
+      "trackingNumber": "",
+      "note": "",
+      "items": [
+        {
+          "productId": "p15022komxi",
+          "name": "Quần lửng Uniqilo ",
+          "sku": "UNI-0010",
+          "qty": 1,
+          "price": 339000,
+          "costPrice": 214140,
+          "productShippingFee": 96000,
+          "packagingFee": 3000
+        }
+      ],
+      "shippingFee": 20000,
+      "shippingPayer": "customer",
+      "status": "deposited",
+      "depositAmount": 50000,
+      "total": 359000,
+      "createdAt": 1792040400000
+    },
+    {
+      "id": "ogsgkq9fj55",
+      "code": "DH0003",
+      "customerName": "Tiktok: Học bằng lái xe ở Nhật",
+      "customerPhone": "0969369554",
+      "customerAddress": "Công ty TNHH giày venus,xã Hà Bình, huyện Hà Trung, tỉnh Thanh Hoá",
+      "shippingCarrier": "",
+      "trackingNumber": "",
+      "note": "Trương Thị Minh Tâm\nSDT:0969369554\nĐịa chỉ: Công ty TNHH giày venus,xã Hà Bình, huyện Hà Trung, tỉnh Thanh Hoá",
+      "items": [
+        {
+          "productId": "p4tcwbtkfaq",
+          "name": "Giày GU",
+          "sku": "GU-0003",
+          "qty": 1,
+          "price": 285000,
+          "costPrice": 164340,
+          "productShippingFee": 80500,
+          "packagingFee": 3000
+        }
+      ],
+      "shippingFee": 20000,
+      "shippingPayer": "customer",
+      "status": "deposited",
+      "depositAmount": 50000,
+      "total": 305000,
+      "createdAt": 1791781200000
+    },
+    {
+      "id": "o9gidzoaiwn",
+      "code": "DH0002",
+      "customerName": "FB: Nguyễn Hằng",
+      "customerPhone": "",
+      "note": "https://www.facebook.com/hang050515",
+      "items": [
+        {
+          "productId": "pe8ve8sfv1k",
+          "name": "Quần lửng Uniqilo",
+          "sku": "UNI-0007",
+          "qty": 1,
+          "price": 339000,
+          "costPrice": 214140,
+          "productShippingFee": 96000,
+          "packagingFee": 3000
+        }
+      ],
+      "shippingFee": 20000,
+      "status": "deposited",
+      "depositAmount": 50000,
+      "total": 359000,
+      "createdAt": 1791694800000,
+      "customerAddress": "",
+      "shippingCarrier": "",
+      "trackingNumber": "",
+      "shippingPayer": "customer"
+    },
+    {
+      "id": "oa1b2c3",
+      "code": "DH0001",
+      "customerName": "FB:Hồng Phúc",
+      "customerPhone": "",
+      "note": "https://www.facebook.com/hongphuc1402",
+      "items": [
+        {
+          "productId": "plkncqvi0vn",
+          "name": "Quần lửng Uniqilo ",
+          "sku": "UNI-0009",
+          "qty": 1,
+          "price": 339000,
+          "costPrice": 214140,
+          "productShippingFee": 96000,
+          "packagingFee": 0
+        }
+      ],
+      "status": "deposited",
+      "total": 359000,
+      "createdAt": 1791781200000,
+      "depositAmount": 50000,
+      "customerAddress": "",
+      "shippingCarrier": "",
+      "trackingNumber": "",
+      "shippingFee": 20000,
+      "shippingPayer": "customer"
+    }
+  ],
+  "contributions": [
+    {
+      "id": "capital5669ec7j9b",
+      "date": "2026-10-15",
+      "contributor": "Thảo",
+      "amountVnd": 3000000
+    },
+    {
+      "id": "capitalloesoi69xm",
+      "date": "2026-10-15",
+      "contributor": "Khánh Vy",
+      "amountVnd": 3000000
+    }
+  ],
+  "invoices": []
+}

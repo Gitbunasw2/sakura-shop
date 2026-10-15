@@ -1,6 +1,8 @@
 # Sakura Shop — Kho & đơn hàng
 
-Ứng dụng quản lý **tồn kho** và **đơn hàng** cho shop quần áo + mỹ phẩm Nhật. Dữ liệu lưu trên trình duyệt (có xuất/nhập backup). Chưa có bán hàng online — chỉ nội bộ.
+Ứng dụng quản lý **tồn kho**, **đơn hàng**, hóa đơn nhập/xuất và góp vốn cho shop quần áo + mỹ phẩm Nhật. Thay đổi được lưu trong trình duyệt; ứng dụng tĩnh không tự ghi ngược vào các file JSON trên máy chủ.
+
+`funds.json` chứa dữ liệu góp vốn; `invoice.json` chứa hóa đơn nhập/xuất. Dùng **Xuất backup** để tải `store_data.json`, `order_data.json`, `funds.json` và `invoice.json`; nhập các file để khôi phục dữ liệu.
 
 ## Chạy local
 

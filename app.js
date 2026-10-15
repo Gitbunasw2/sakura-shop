@@ -30,9 +30,11 @@ async function loadData() {
   }
 
   try {
-    const [storeRes, orderRes] = await Promise.all([
+    const [storeRes, orderRes, fundsRes, invoiceRes] = await Promise.all([
       fetch('./store_data.json'),
-      fetch('./order_data.json')
+      fetch('./order_data.json'),
+      fetch('./funds.json'),
+      fetch('./invoice.json')
     ]);
 
     if (!storeRes.ok || !orderRes.ok) {
@@ -41,13 +43,15 @@ async function loadData() {
 
     const storeData = await storeRes.json();
     const orderData = await orderRes.json();
+    const fundsData = fundsRes.ok ? await fundsRes.json() : {};
+    const invoiceData = invoiceRes.ok ? await invoiceRes.json() : {};
 
     state = normalizeState({
       products: storeData.products || [],
       categories: storeData.categories || [],
       orders: orderData.orders || [],
-      contributions: orderData.contributions || [],
-      invoices: orderData.invoices || []
+      contributions: fundsData.contributions || orderData.contributions || [],
+      invoices: invoiceData.invoices || orderData.invoices || []
     });
 
     save();
@@ -1463,16 +1467,24 @@ function exportStoreData() {
 
 function exportOrderData() {
   const orderData = {
-    orders: state.orders,
-    contributions: state.contributions,
-    invoices: state.invoices
+    orders: state.orders
   };
   downloadJSON(orderData, "order_data.json");
+}
+
+function exportInvoiceData() {
+  downloadJSON({ invoices: state.invoices }, "invoice.json");
+}
+
+function exportFundsData() {
+  downloadJSON({ contributions: state.contributions }, "funds.json");
 }
 
 function exportBackupBundle() {
   exportStoreData();
   setTimeout(() => exportOrderData(), 150);
+  setTimeout(() => exportFundsData(), 300);
+  setTimeout(() => exportInvoiceData(), 450);
 }
 
 function openImportBackupModal() {
@@ -1485,6 +1497,14 @@ function openImportBackupModal() {
       <label class="full">
         File order_data.json
         <input id="backup-order-file" type="file" accept=".json,application/json" required />
+      </label>
+      <label class="full">
+        File funds.json (không bắt buộc với backup cũ)
+        <input id="backup-funds-file" type="file" accept=".json,application/json" />
+      </label>
+      <label class="full">
+        File invoice.json (không bắt buộc với backup cũ)
+        <input id="backup-invoice-file" type="file" accept=".json,application/json" />
       </label>
       <div class="form-actions full">
         <button type="button" class="btn secondary" id="cancel-modal">Hủy</button>
@@ -1499,6 +1519,8 @@ function openImportBackupModal() {
 
     const storeFile = document.getElementById("backup-store-file").files[0];
     const orderFile = document.getElementById("backup-order-file").files[0];
+    const fundsFile = document.getElementById("backup-funds-file").files[0];
+    const invoiceFile = document.getElementById("backup-invoice-file").files[0];
 
     if (!storeFile || !orderFile) {
       toast("Vui lòng chọn cả 2 file store_data.json và order_data.json");
@@ -1506,13 +1528,17 @@ function openImportBackupModal() {
     }
 
     try {
-      const [storeText, orderText] = await Promise.all([
+      const [storeText, orderText, fundsText, invoiceText] = await Promise.all([
         storeFile.text(),
         orderFile.text(),
+        fundsFile ? fundsFile.text() : Promise.resolve(null),
+        invoiceFile ? invoiceFile.text() : Promise.resolve(null),
       ]);
 
       const storeData = JSON.parse(storeText);
       const orderData = JSON.parse(orderText);
+      const fundsData = fundsText ? JSON.parse(fundsText) : null;
+      const invoiceData = invoiceText ? JSON.parse(invoiceText) : null;
 
       if (!(storeData && (storeData.products || storeData.categories))) {
         throw new Error("File store không đúng định dạng");
@@ -1520,13 +1546,19 @@ function openImportBackupModal() {
       if (!(orderData && orderData.orders)) {
         throw new Error("File order không đúng định dạng");
       }
+      if (fundsData && !Array.isArray(fundsData.contributions)) {
+        throw new Error("File funds không đúng định dạng");
+      }
+      if (invoiceData && !Array.isArray(invoiceData.invoices)) {
+        throw new Error("File invoice không đúng định dạng");
+      }
 
       state = normalizeState({
         products: storeData.products || [],
         categories: storeData.categories || [],
         orders: orderData.orders || [],
-        contributions: orderData.contributions || [],
-        invoices: orderData.invoices || []
+        contributions: fundsData?.contributions || orderData.contributions || [],
+        invoices: invoiceData?.invoices || orderData.invoices || []
       });
 
       save();
@@ -1546,6 +1578,8 @@ function importDualFiles(event) {
 
   let loadedStore = null;
   let loadedOrders = null;
+  let loadedFunds = null;
+  let loadedInvoices = null;
   let processedCount = 0;
 
   Array.from(files).forEach((file) => {
@@ -1557,6 +1591,10 @@ function importDualFiles(event) {
           loadedStore = parsed;
         } else if (parsed.orders) {
           loadedOrders = parsed;
+        } else if (Array.isArray(parsed.contributions)) {
+          loadedFunds = parsed;
+        } else if (Array.isArray(parsed.invoices)) {
+          loadedInvoices = parsed;
         }
       } catch (err) {
         console.error("Lỗi đọc file JSON:", err);
@@ -1575,9 +1613,12 @@ function importDualFiles(event) {
         }
         if (loadedOrders) {
           if (loadedOrders.orders) state.orders = loadedOrders.orders;
-          if (loadedOrders.contributions) state.contributions = loadedOrders.contributions;
           if (loadedOrders.invoices) state.invoices = loadedOrders.invoices;
         }
+        if (loadedFunds) state.contributions = loadedFunds.contributions;
+        else if (loadedOrders?.contributions) state.contributions = loadedOrders.contributions;
+        if (loadedInvoices) state.invoices = loadedInvoices.invoices;
+        else if (loadedOrders?.invoices) state.invoices = loadedOrders.invoices;
 
         state = normalizeState(state);
         save();

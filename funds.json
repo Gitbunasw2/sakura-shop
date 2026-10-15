@@ -1,0 +1,16 @@
+{
+  "contributions": [
+    {
+      "id": "capital-khanh-vy-20261015",
+      "date": "2026-10-15",
+      "contributor": "Khánh Vy",
+      "amountVnd": 3000000
+    },
+    {
+      "id": "capital-thao-20261015",
+      "date": "2026-10-15",
+      "contributor": "Thảo",
+      "amountVnd": 3000000
+    }
+  ]
+}
