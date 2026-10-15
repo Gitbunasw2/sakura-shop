@@ -13,6 +13,7 @@ const STATUSES = {
 
 let state = { products: [], orders: [], categories: [], contributions: [] };
 let currentView = "dashboard";
+let inventorySearchQuery = "";
 
 // Tải dữ liệu: ưu tiên localStorage để dữ liệu mới không bị mất khi reload
 async function loadData() {
@@ -417,8 +418,8 @@ function renderDashboard() {
 }
 
 function renderInventory() {
-  const q = (document.getElementById("inv-q")?.value || "");
-  const searchValue = normalizeText(q);
+  const q = document.getElementById("inv-q")?.value ?? inventorySearchQuery;
+  const searchValue = normalizeText(inventorySearchQuery);
   const cat = document.getElementById("inv-cat")?.value || "";
   const rows = state.products.filter((p) => {
     const haystack = [
@@ -435,13 +436,14 @@ function renderInventory() {
   });
 
   document.getElementById("view-inventory").innerHTML = `
-    <div class="toolbar">
-      <input id="inv-q" class="search" placeholder="Tìm SKU, tên, thương hiệu..." value="${q}" />
+    <form id="inventory-search-form" class="toolbar">
+      <input id="inv-q" class="search" placeholder="Tìm SKU, tên, thương hiệu..." value="${esc(q)}" />
+      <button class="btn secondary" type="submit">Tìm kiếm</button>
       <select id="inv-cat">
         <option value="">Tất cả nhóm</option>
         ${categoryOptions(cat)}
       </select>
-    </div>
+    </form>
     ${
       rows.length
         ? `<div class="table-wrap"><table><thead><tr>
@@ -481,7 +483,11 @@ function renderInventory() {
     }
   `;
 
-  document.getElementById("inv-q").oninput = renderInventory;
+  document.getElementById("inventory-search-form").onsubmit = (event) => {
+    event.preventDefault();
+    inventorySearchQuery = document.getElementById("inv-q").value;
+    renderInventory();
+  };
   document.getElementById("inv-cat").onchange = renderInventory;
   document.querySelectorAll("[data-edit]").forEach((b) => {
     b.onclick = () => productForm(b.dataset.edit);
