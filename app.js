@@ -403,7 +403,7 @@ function renderInventory() {
     ${
       rows.length
         ? `<div class="table-wrap"><table><thead><tr>
-          <th>SKU</th><th>Sản phẩm</th><th>Link gốc</th><th>Brand</th><th>Size</th><th>Màu sắc</th><th>Nhóm</th><th>Tồn</th><th>Giá gốc JPY</th><th>Giá gốc VNĐ</th><th>Trọng lượng</th><th>Phí vận chuyển</th><th>Phí bao bì</th><th>Giá bán</th><th>Lợi nhuận</th><th></th>
+          <th>SKU</th><th>Sản phẩm</th><th>Link gốc</th><th>Size</th><th>Màu sắc</th><th>Nhóm</th><th>Tồn</th><th>Giá gốc JPY</th><th>Giá gốc VNĐ</th><th>Trọng lượng</th><th>Phí vận chuyển</th><th>Phí bao bì</th><th>Giá bán</th><th>Lợi nhuận</th><th></th>
         </tr></thead><tbody>
         ${rows
           .map((p) => {
@@ -416,7 +416,6 @@ function renderInventory() {
               <td>${esc(p.sku)}</td>
               <td><strong>${esc(p.name)}</strong></td>
               <td>${p.sourceUrl ? `<a href="${esc(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Mở link</a>` : "—"}</td>
-              <td>${esc(p.brand || "—")}</td>
               <td>${esc(p.variant || "—")}</td>
               <td>${esc(p.color || "—")}</td>
               <td><span class="badge">${esc(categoryName(p.category))}</span></td>
