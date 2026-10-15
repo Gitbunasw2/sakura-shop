@@ -86,6 +86,7 @@ function normalizeState(parsed) {
   const productsById = new Map(products.map((product) => [product.id, product]));
   orders.forEach((o) => {
     if (o.depositAmount === undefined) o.depositAmount = 0;
+    if (o.customerAddress === undefined) o.customerAddress = "";
     (o.items || []).forEach((item) => {
       const product = productsById.get(item.productId);
       if (item.costPrice === undefined) item.costPrice = Number(product?.costPrice) || 0;
@@ -593,6 +594,7 @@ function orderForm(orderId) {
       <div class="form-grid">
         <label>Tên khách<input name="customerName" required placeholder="Nguyễn A" value="${esc(existingOrder?.customerName || "")}" /></label>
         <label>Số điện thoại<input name="customerPhone" placeholder="09..." value="${esc(existingOrder?.customerPhone || "")}" /></label>
+        <label class="full">Địa chỉ khách hàng<textarea name="customerAddress" rows="2" placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành phố">${esc(existingOrder?.customerAddress || "")}</textarea></label>
         <label>Phí vận chuyển (đ)<input name="shippingFee" id="order-shipping-fee" type="number" min="0" step="1" placeholder="0" value="${existingOrder?.shippingFee || ""}" /></label>
         <label>Trạng thái
           <select name="status" id="new-order-status">
@@ -751,6 +753,7 @@ function submitOrder(e, orderId) {
     code: existingOrder?.code || "DH" + String(state.orders.length + 1).padStart(4, "0"),
     customerName: fd.get("customerName").trim(),
     customerPhone: fd.get("customerPhone").trim(),
+    customerAddress: fd.get("customerAddress").trim(),
     note: fd.get("note").trim(),
     items,
     shippingFee,
@@ -775,6 +778,7 @@ function orderDetail(id) {
   if (!o) return;
   openModal("Đơn " + o.code, `
     <p><strong>${o.customerName}</strong> · ${o.customerPhone || "—"}</p>
+    <p>Địa chỉ: ${esc(o.customerAddress || "—")}</p>
     <table><thead><tr><th>SP</th><th>SL</th><th>Giá</th></tr></thead>
     <tbody>${o.items.map((i) => `<tr><td>${i.sku}${i.name}</td><td>${i.qty}</td><td>${money(i.qty * i.price)}</td></tr>`).join("")}</tbody></table>
     <p>Phí vận chuyển: ${money(o.shippingFee || 0)}</p>
