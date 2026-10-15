@@ -550,27 +550,32 @@ function renderOrders() {
   });
 }
 
-function orderForm() {
+function orderForm(orderId) {
+  const existingOrder = orderId ? state.orders.find((order) => order.id === orderId) : null;
+  if (orderId && (!existingOrder || existingOrder.status === "cancelled")) return;
   const sellable = state.products.filter((p) => p.stock > 0);
-  if (!sellable.length) {
+  if (!sellable.length && !existingOrder) {
     toast("Kho trống — thêm sản phẩm trước");
     return;
   }
-  openModal("Tạo đơn hàng", `
+  const availableStatuses = existingOrder
+    ? ["new", "confirmed", "pending_payment", "deposited", "paid", "shipping", "done"]
+    : ["new", "confirmed", "pending_payment", "deposited", "paid"];
+  openModal(existingOrder ? "Sửa đơn " + existingOrder.code : "Tạo đơn hàng", `
     <form id="order-form" class="stack">
       <div class="form-grid">
-        <label>Tên khách<input name="customerName" required placeholder="Nguyễn A" /></label>
-        <label>Số điện thoại<input name="customerPhone" placeholder="09..." /></label>
-        <label>Phí vận chuyển (đ)<input name="shippingFee" id="order-shipping-fee" type="number" min="0" step="1" placeholder="0" /></label>
+        <label>Tên khách<input name="customerName" required placeholder="Nguyễn A" value="${esc(existingOrder?.customerName || "")}" /></label>
+        <label>Số điện thoại<input name="customerPhone" placeholder="09..." value="${esc(existingOrder?.customerPhone || "")}" /></label>
+        <label>Phí vận chuyển (đ)<input name="shippingFee" id="order-shipping-fee" type="number" min="0" step="1" placeholder="0" value="${existingOrder?.shippingFee || ""}" /></label>
         <label>Trạng thái
           <select name="status" id="new-order-status">
-            ${["new", "confirmed", "pending_payment", "deposited", "paid"].map((status) => `<option value="${status}">${STATUSES[status]}</option>`).join("")}
+            ${availableStatuses.map((status) => `<option value="${status}" ${status === (existingOrder?.status || "new") ? "selected" : ""}>${STATUSES[status]}</option>`).join("")}
           </select>
         </label>
-        <label id="new-deposit-field" class="hidden">Tiền cọc (đ)
-          <input name="depositAmount" id="new-deposit-amount" type="number" min="1" step="1" />
+        <label id="new-deposit-field" class="${existingOrder?.status === "deposited" ? "" : "hidden"}">Tiền cọc (đ)
+          <input name="depositAmount" id="new-deposit-amount" type="number" min="1" step="1" value="${existingOrder?.depositAmount || ""}" ${existingOrder?.status === "deposited" ? "required" : ""} />
         </label>
-        <label class="full">Ghi chú<textarea name="note" rows="2"></textarea></label>
+        <label class="full">Ghi chú<textarea name="note" rows="2">${esc(existingOrder?.note || "")}</textarea></label>
       </div>
       <h3 style="margin:16px 0 8px">Sản phẩm</h3>
       <div id="lines" class="order-lines"></div>
@@ -581,7 +586,7 @@ function orderForm() {
       </div>
       <div class="form-actions">
         <button type="button" class="btn secondary" id="cancel-modal">Hủy</button>
-        <button class="btn" type="submit">Tạo đơn & trừ kho</button>
+        <button class="btn" type="submit">${existingOrder ? "Lưu thay đổi" : "Tạo đơn & trừ kho"}</button>
       </div>
     </form>
   `);
@@ -598,21 +603,25 @@ function orderForm() {
   };
   document.getElementById("order-shipping-fee").oninput = updateOrderPaymentSummary;
   depositInput.oninput = updateOrderPaymentSummary;
-  addLine();
-  document.getElementById("order-form").onsubmit = submitOrder;
+  if (existingOrder) {
+    existingOrder.items.forEach((item) => addLine(item.productId, item.qty));
+  } else {
+    addLine();
+  }
+  document.getElementById("order-form").onsubmit = (e) => submitOrder(e, orderId);
 }
 
-function productOptions() {
-  return state.products.map((p) => `<option value="${p.id}">${p.sku} — ${p.name} (tồn ${p.stock})</option>`).join("");
+function productOptions(selectedId) {
+  return state.products.map((p) => `<option value="${esc(p.id)}" ${p.id === selectedId ? "selected" : ""}>${esc(p.sku)} — ${esc(p.name)} (tồn ${p.stock})</option>`).join("");
 }
 
-function addLine() {
+function addLine(productId, quantity = 1) {
   const wrap = document.getElementById("lines");
   const row = document.createElement("div");
   row.className = "line";
   row.innerHTML = `
-    <select name="pid">${productOptions()}</select>
-    <input name="qty" type="number" min="1" value="1" />
+    <select name="pid">${productOptions(productId)}</select>
+    <input name="qty" type="number" min="1" step="1" value="${quantity}" />
     <button type="button" class="btn danger rm">X</button>
   `;
   row.querySelector("select").onchange = updateOrderPaymentSummary;
@@ -643,19 +652,34 @@ function updateOrderPaymentSummary() {
   if (dueElement) dueElement.textContent = money(Math.max(0, total - paidAmount));
 }
 
-function submitOrder(e) {
+function submitOrder(e, orderId) {
   e.preventDefault();
   const fd = new FormData(e.target);
+  const existingOrder = orderId ? state.orders.find((order) => order.id === orderId) : null;
   const lines = [...document.querySelectorAll("#lines .line")];
   if (!lines.length) return toast("Thêm ít nhất 1 sản phẩm");
 
   const items = [];
+  const requestedQuantities = new Map();
   for (const line of lines) {
     const pid = line.querySelector("[name=pid]").value;
     const qty = Number(line.querySelector("[name=qty]").value);
     const p = productById(pid);
-    if (!p || qty < 1 || qty > p.stock) return toast("Số lượng không hợp lệ hoặc vượt tồn kho");
+    if (!p || !Number.isInteger(qty) || qty < 1) return toast("Số lượng không hợp lệ");
+    requestedQuantities.set(pid, (requestedQuantities.get(pid) || 0) + qty);
     items.push({ productId: p.id, name: p.name, sku: p.sku, qty, price: p.price });
+  }
+
+  const originalQuantities = new Map();
+  if (existingOrder) {
+    existingOrder.items.forEach((item) => {
+      originalQuantities.set(item.productId, (originalQuantities.get(item.productId) || 0) + item.qty);
+    });
+  }
+  for (const [pid, qty] of requestedQuantities) {
+    const product = productById(pid);
+    const available = product.stock + (originalQuantities.get(pid) || 0);
+    if (qty > available) return toast("Số lượng không hợp lệ hoặc vượt tồn kho");
   }
 
   const shippingFee = Number(fd.get("shippingFee")) || 0;
@@ -664,7 +688,7 @@ function submitOrder(e) {
   }
   const total = items.reduce((sum, item) => sum + item.qty * item.price, 0) + shippingFee;
   const status = fd.get("status");
-  let depositAmount = 0;
+  let depositAmount = existingOrder?.depositAmount || 0;
   if (status === "deposited") {
     depositAmount = Number(fd.get("depositAmount"));
     if (!Number.isFinite(depositAmount) || depositAmount <= 0 || depositAmount > total) {
@@ -673,26 +697,40 @@ function submitOrder(e) {
   } else if (status === "paid") {
     depositAmount = total;
   }
+  if (depositAmount > total) {
+    return toast("Tổng đơn không thể thấp hơn số tiền khách đã thanh toán");
+  }
 
-  items.forEach(i => { productById(i.productId).stock -= i.qty; });
+  if (existingOrder) {
+    existingOrder.items.forEach((item) => {
+      const product = productById(item.productId);
+      if (product) product.stock += item.qty;
+    });
+  }
+  items.forEach((item) => { productById(item.productId).stock -= item.qty; });
 
   const order = {
-    id: uid("o"),
-    code: "DH" + String(state.orders.length + 1).padStart(4, "0"),
-    customerName: fd.get("customerName"),
-    customerPhone: fd.get("customerPhone"),
-    note: fd.get("note"),
+    ...(existingOrder || {}),
+    id: existingOrder?.id || uid("o"),
+    code: existingOrder?.code || "DH" + String(state.orders.length + 1).padStart(4, "0"),
+    customerName: fd.get("customerName").trim(),
+    customerPhone: fd.get("customerPhone").trim(),
+    note: fd.get("note").trim(),
     items,
     shippingFee,
     status,
     depositAmount,
     total,
-    createdAt: Date.now(),
+    createdAt: existingOrder?.createdAt || Date.now(),
   };
-  state.orders.unshift(order);
+  if (existingOrder) {
+    Object.assign(existingOrder, order);
+  } else {
+    state.orders.unshift(order);
+  }
   save();
   closeModal();
-  toast("Đã tạo " + order.code);
+  toast(existingOrder ? "Đã cập nhật " + order.code : "Đã tạo " + order.code);
   setView("orders");
 }
 
@@ -716,6 +754,7 @@ function orderDetail(id) {
       <input id="edit-deposit-amount" type="number" min="1" step="1" value="${o.depositAmount || ""}" ${o.status === "deposited" ? "required" : ""} />
     </label>
     <div class="form-actions">
+      ${o.status !== "cancelled" ? `<button class="btn secondary" id="edit-order">Sửa đơn</button>` : ""}
       ${o.status !== "cancelled" && o.status !== "done" ? `<button class="btn danger" id="cancel-order">Hủy đơn (hoàn kho)</button>` : ""}
       <button class="btn" id="save-st">Lưu trạng thái</button>
     </div>
@@ -729,6 +768,8 @@ function orderDetail(id) {
     depositInput.required = isDeposited;
     if (statusSelect.value === "paid") depositInput.value = o.total;
   };
+  const editButton = document.getElementById("edit-order");
+  if (editButton) editButton.onclick = () => orderForm(id);
   document.getElementById("save-st").onclick = () => {
     const nextStatus = statusSelect.value;
     if (nextStatus === "deposited") {
