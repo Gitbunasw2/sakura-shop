@@ -398,11 +398,11 @@ function renderDashboard() {
         <h3>Sắp hết hàng</h3>
         ${
           low.length
-            ? `<table><thead><tr><th>SKU</th><th>Sản phẩm</th><th>Tồn</th><th>Ngưỡng</th></tr></thead><tbody>
+            ? `<table><thead><tr><th>SKU</th><th>Sản phẩm</th><th>Size</th><th>Màu sắc</th><th>Tồn</th><th>Ngưỡng</th></tr></thead><tbody>
             ${low
               .map(
                 (p) =>
-                  `<tr><td>${p.sku}</td><td>${p.name}</td><td><span class="badge low">${p.stock}</span></td><td>${p.minStock}</td></tr>`
+                  `<tr><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td>${esc(p.variant || "—")}</td><td>${esc(p.color || "—")}</td><td><span class="badge low">${p.stock}</span></td><td>${p.minStock}</td></tr>`
               )
               .join("")}
           </tbody></table>`
