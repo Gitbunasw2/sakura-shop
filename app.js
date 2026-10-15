@@ -3,6 +3,9 @@ const STORAGE_KEY = "sakura-shop-v3";
 const STATUSES = {
   new: "Mới",
   confirmed: "Đã xác nhận",
+  pending_payment: "Chờ thanh toán",
+  deposited: "Đã cọc",
+  paid: "Đã thanh toán đủ",
   shipping: "Đang giao",
   done: "Hoàn thành",
   cancelled: "Đã hủy",
@@ -79,6 +82,9 @@ function normalizeState(parsed) {
       p.color = colorParts.join("/").trim();
     }
     if (p.color === undefined) p.color = "";
+  });
+  orders.forEach((o) => {
+    if (o.depositAmount === undefined) o.depositAmount = 0;
   });
   return { products, orders, categories };
 }
@@ -555,6 +561,14 @@ function orderForm() {
       <div class="form-grid">
         <label>Tên khách<input name="customerName" required placeholder="Nguyễn A" /></label>
         <label>Số điện thoại<input name="customerPhone" placeholder="09..." /></label>
+        <label>Trạng thái
+          <select name="status" id="new-order-status">
+            ${["new", "confirmed", "pending_payment", "deposited", "paid"].map((status) => `<option value="${status}">${STATUSES[status]}</option>`).join("")}
+          </select>
+        </label>
+        <label id="new-deposit-field" class="hidden">Tiền cọc (đ)
+          <input name="depositAmount" id="new-deposit-amount" type="number" min="1" step="1" />
+        </label>
         <label class="full">Ghi chú<textarea name="note" rows="2"></textarea></label>
       </div>
       <h3 style="margin:16px 0 8px">Sản phẩm</h3>
@@ -568,6 +582,14 @@ function orderForm() {
   `);
   document.getElementById("cancel-modal").onclick = closeModal;
   document.getElementById("add-line").onclick = () => addLine();
+  const statusSelect = document.getElementById("new-order-status");
+  const depositField = document.getElementById("new-deposit-field");
+  const depositInput = document.getElementById("new-deposit-amount");
+  statusSelect.onchange = () => {
+    const isDeposited = statusSelect.value === "deposited";
+    depositField.classList.toggle("hidden", !isDeposited);
+    depositInput.required = isDeposited;
+  };
   addLine();
   document.getElementById("order-form").onsubmit = submitOrder;
 }
@@ -604,6 +626,18 @@ function submitOrder(e) {
     items.push({ productId: p.id, name: p.name, sku: p.sku, qty, price: p.price });
   }
 
+  const total = items.reduce((sum, item) => sum + item.qty * item.price, 0);
+  const status = fd.get("status");
+  let depositAmount = 0;
+  if (status === "deposited") {
+    depositAmount = Number(fd.get("depositAmount"));
+    if (!Number.isFinite(depositAmount) || depositAmount <= 0 || depositAmount > total) {
+      return toast("Tiền cọc phải lớn hơn 0 và không vượt quá tổng đơn");
+    }
+  } else if (status === "paid") {
+    depositAmount = total;
+  }
+
   items.forEach(i => { productById(i.productId).stock -= i.qty; });
 
   const order = {
@@ -613,8 +647,9 @@ function submitOrder(e) {
     customerPhone: fd.get("customerPhone"),
     note: fd.get("note"),
     items,
-    status: "new",
-    total: items.reduce((s, i) => s + i.qty * i.price, 0),
+    status,
+    depositAmount,
+    total,
     createdAt: Date.now(),
   };
   state.orders.unshift(order);
@@ -632,18 +667,42 @@ function orderDetail(id) {
     <table><thead><tr><th>SP</th><th>SL</th><th>Giá</th></tr></thead>
     <tbody>${o.items.map((i) => `<tr><td>${i.sku}${i.name}</td><td>${i.qty}</td><td>${money(i.qty * i.price)}</td></tr>`).join("")}</tbody></table>
     <p style="margin-top:12px"><strong>Tổng: ${money(o.total)}</strong></p>
+    <p>Đã thanh toán: <strong id="order-paid-amount">${money(o.status === "paid" ? o.total : o.depositAmount || 0)}</strong></p>
+    <p>Còn phải trả: <strong id="order-remaining-amount">${money(Math.max(0, o.total - (o.status === "paid" ? o.total : o.depositAmount || 0)))}</strong></p>
     <label>Trạng thái
       <select id="st-change" ${o.status === "cancelled" ? "disabled" : ""}>
         ${Object.entries(STATUSES).filter(([k]) => k !== "cancelled").map(([k, v]) => `<option value="${k}" ${o.status === k ? "selected" : ""}>${v}</option>`).join("")}
       </select>
+    </label>
+    <label id="edit-deposit-field" class="${o.status === "deposited" ? "" : "hidden"}">Tiền cọc (đ)
+      <input id="edit-deposit-amount" type="number" min="1" step="1" value="${o.depositAmount || ""}" ${o.status === "deposited" ? "required" : ""} />
     </label>
     <div class="form-actions">
       ${o.status !== "cancelled" && o.status !== "done" ? `<button class="btn danger" id="cancel-order">Hủy đơn (hoàn kho)</button>` : ""}
       <button class="btn" id="save-st">Lưu trạng thái</button>
     </div>
   `);
+  const statusSelect = document.getElementById("st-change");
+  const depositField = document.getElementById("edit-deposit-field");
+  const depositInput = document.getElementById("edit-deposit-amount");
+  statusSelect.onchange = () => {
+    const isDeposited = statusSelect.value === "deposited";
+    depositField.classList.toggle("hidden", !isDeposited);
+    depositInput.required = isDeposited;
+    if (statusSelect.value === "paid") depositInput.value = o.total;
+  };
   document.getElementById("save-st").onclick = () => {
-    o.status = document.getElementById("st-change").value;
+    const nextStatus = statusSelect.value;
+    if (nextStatus === "deposited") {
+      const amount = Number(depositInput.value);
+      if (!Number.isFinite(amount) || amount <= 0 || amount > o.total) {
+        return toast("Tiền cọc phải lớn hơn 0 và không vượt quá tổng đơn");
+      }
+      o.depositAmount = amount;
+    } else if (nextStatus === "paid") {
+      o.depositAmount = o.total;
+    }
+    o.status = nextStatus;
     save();
     closeModal();
     render();
