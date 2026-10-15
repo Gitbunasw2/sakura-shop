@@ -283,9 +283,10 @@ function renderDashboard() {
     .filter((o) => o.status !== "cancelled")
     .reduce((s, o) => s + o.total, 0);
   const profit = state.orders
-    .filter((o) => o.status !== "cancelled" && orderMatchesPeriod(o, period, selectedDate))
+    .filter((o) => o.status !== "cancelled" && (period === "year" || orderMatchesPeriod(o, period, selectedDate)))
     .reduce((sum, order) => sum + orderProfit(order), 0);
   const periodLabels = { day: "ngày", week: "tuần", month: "tháng", year: "năm" };
+  const profitLabel = period === "year" ? "Lợi nhuận (chưa hủy)" : `Lợi nhuận (${periodLabels[period]})`;
 
   document.getElementById("view-dashboard").innerHTML = `
     <div class="toolbar dashboard-filters">
@@ -297,14 +298,14 @@ function renderDashboard() {
           <option value="year" ${period === "year" ? "selected" : ""}>Năm</option>
         </select>
       </label>
-      <label>Ngày mốc<input id="profit-date" type="date" value="${selectedDate}" /></label>
+      <label>Ngày mốc<input id="profit-date" type="date" value="${selectedDate}" ${period === "year" ? "disabled" : ""} /></label>
     </div>
     <div class="cards">
       <div class="card"><div class="label">Mã hàng</div><div class="value">${sku}</div></div>
       <div class="card"><div class="label">Tổng tồn</div><div class="value">${units}</div></div>
       <div class="card"><div class="label">Đơn đang xử lý</div><div class="value">${openOrders}</div></div>
       <div class="card"><div class="label">Doanh thu (chưa hủy)</div><div class="value" style="font-size:20px">${money(revenue)}</div></div>
-      <div class="card"><div class="label">Lợi nhuận (${periodLabels[period]})</div><div class="value" style="font-size:20px">${money(profit)}</div></div>
+      <div class="card"><div class="label">${profitLabel}</div><div class="value" style="font-size:20px">${money(profit)}</div></div>
     </div>
     <div class="card list-block">
       <h3>Sắp hết hàng</h3>
