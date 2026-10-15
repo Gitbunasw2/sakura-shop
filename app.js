@@ -238,6 +238,7 @@ function moneyJpy(n) {
 }
 
 function orderProfit(order) {
+  if (order.status === "cancelled") return 0;
   const productProfit = order.items.reduce((sum, item) => {
     const unitProfit = Number(item.price || 0)
       - Number(item.costPrice || 0)
@@ -815,9 +816,12 @@ function renderOrders() {
             <td>${count} sp</td>
             <td>${money(o.total)}</td>
             <td><strong>${money(orderAmountDue(o))}</strong></td>
-            <td><strong>${money(orderProfit(o))}</strong></td>
+            <td><strong>${o.status === "cancelled" ? "—" : money(orderProfit(o))}</strong></td>
             <td><span class="badge status-${o.status}">${STATUSES[o.status]}</span></td>
-            <td class="row-actions"><button class="btn secondary" data-view-order="${o.id}">Chi tiết</button></td>
+            <td class="row-actions">
+              <button class="btn secondary" data-view-order="${esc(o.id)}">Chi tiết</button>
+              ${o.status === "cancelled" ? `<button class="btn danger" data-delete-order="${esc(o.id)}">Xóa</button>` : ""}
+            </td>
           </tr>`;
         }).join("")}
         </tbody></table>`
@@ -829,6 +833,19 @@ function renderOrders() {
   document.querySelectorAll("[data-view-order]").forEach((b) => {
     b.onclick = () => orderDetail(b.dataset.viewOrder);
   });
+  document.querySelectorAll("[data-delete-order]").forEach((button) => {
+    button.onclick = () => deleteCancelledOrder(button.dataset.deleteOrder);
+  });
+}
+
+function deleteCancelledOrder(id) {
+  const order = state.orders.find((item) => item.id === id);
+  if (!order || order.status !== "cancelled") return;
+  if (!confirm(`Xóa vĩnh viễn đơn ${order.code}? Tồn kho sẽ không thay đổi.`)) return;
+  state.orders = state.orders.filter((item) => item.id !== id);
+  save();
+  toast("Đã xóa đơn " + order.code);
+  renderOrders();
 }
 
 function renderInvoices() {
@@ -1452,7 +1469,7 @@ function orderDetail(id) {
     <tbody>${o.items.map((i) => `<tr><td>${i.sku}${i.name}</td><td>${i.qty}</td><td>${money(i.qty * i.price)}</td></tr>`).join("")}</tbody></table>
     <p>Phí vận chuyển: ${money(o.shippingFee || 0)} · ${o.shippingPayer === "customer" ? "Khách hàng trả" : "Shop trả"}</p>
     <p style="margin-top:12px"><strong>Tổng: ${money(o.total)}</strong></p>
-    <p>Lợi nhuận đơn: <strong>${money(orderProfit(o))}</strong></p>
+    <p>Lợi nhuận đơn: <strong>${o.status === "cancelled" ? "—" : money(orderProfit(o))}</strong></p>
     <p>Đã thanh toán: <strong id="order-paid-amount">${money(["paid", "done"].includes(o.status) ? o.total : o.depositAmount || 0)}</strong></p>
     <p>Còn phải trả: <strong id="order-remaining-amount">${money(orderAmountDue(o))}</strong></p>
     <label>Trạng thái
