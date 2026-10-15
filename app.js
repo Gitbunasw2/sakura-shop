@@ -255,12 +255,16 @@ function renderInventory() {
     </div>
     ${
       rows.length
-        ? `<table><thead><tr>
-          <th>SKU</th><th>Sản phẩm</th><th>Brand</th><th>Size</th><th>Màu sắc</th><th>Nhóm</th><th>Tồn</th><th>Giá gốc JPY</th><th>Giá gốc VNĐ</th><th>Trọng lượng</th><th>Phí vận chuyển</th><th>Phí bao bì</th><th>Giá bán</th><th></th>
+        ? `<div class="table-wrap"><table><thead><tr>
+          <th>SKU</th><th>Sản phẩm</th><th>Brand</th><th>Size</th><th>Màu sắc</th><th>Nhóm</th><th>Tồn</th><th>Giá gốc JPY</th><th>Giá gốc VNĐ</th><th>Trọng lượng</th><th>Phí vận chuyển</th><th>Phí bao bì</th><th>Giá bán</th><th>Lợi nhuận</th><th></th>
         </tr></thead><tbody>
         ${rows
           .map((p) => {
             const low = p.stock <= p.minStock;
+            const profit = Number(p.price || 0)
+              - Number(p.costPrice || 0)
+              - Number(p.shippingFee || 0)
+              - Number(p.packagingFee || 0);
             return `<tr>
               <td>${esc(p.sku)}</td>
               <td><strong>${esc(p.name)}</strong></td>
@@ -274,7 +278,8 @@ function renderInventory() {
               <td>${Number(p.weight || 0)} kg</td>
               <td>${money(p.shippingFee || 0)}</td>
               <td>${money(p.packagingFee || 0)}</td>
-              <td>${money(p.price)}</td>
+              <td><strong>${money(p.price)}</strong></td>
+              <td><strong>${money(profit)}</strong></td>
               <td class="row-actions">
                 <button class="btn secondary" data-edit="${p.id}">Sửa</button>
                 <button class="btn danger" data-del="${p.id}">Xóa</button>
@@ -282,7 +287,7 @@ function renderInventory() {
             </tr>`;
           })
           .join("")}
-        </tbody></table>`
+        </tbody></table></div>`
         : `<div class="card empty">Chưa có sản phẩm.</div>`
     }
   `;
