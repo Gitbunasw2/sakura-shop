@@ -304,6 +304,7 @@ function renderDashboard() {
     currentYear,
     selectedYear,
     ...state.orders.map((order) => new Date(order.createdAt).getFullYear()).filter(Number.isFinite),
+    ...state.contributions.map((contribution) => new Date(`${contribution.date}T12:00:00`).getFullYear()).filter(Number.isFinite),
   ])].sort((a, b) => b - a);
   const low = state.products.filter((p) => p.stock <= p.minStock);
   const sku = state.products.length;
@@ -314,8 +315,12 @@ function renderDashboard() {
       + Number(product.packagingFee || 0);
     return sum + Number(product.stock || 0) * unitCost;
   }, 0);
+  const periodContributions = state.contributions.filter((contribution) => {
+    const createdAt = new Date(`${contribution.date}T12:00:00`).getTime();
+    return Number.isFinite(createdAt) && orderMatchesPeriod({ createdAt }, period, selectedDate);
+  });
   const contributionTotals = new Map();
-  state.contributions.forEach((contribution) => {
+  periodContributions.forEach((contribution) => {
     const name = String(contribution.contributor || "").trim();
     const key = normalizeText(name);
     if (!key) return;
@@ -371,7 +376,7 @@ function renderDashboard() {
       <div class="card"><div class="label">Mã hàng</div><div class="value">${sku}</div></div>
       <div class="card"><div class="label">Tổng tồn</div><div class="value">${units}</div></div>
       <div class="card"><div class="label">Tổng giá trị kho hàng</div><div class="value" style="font-size:20px">${money(inventoryValue)}</div></div>
-      <div class="card"><div class="label">Tổng góp vốn</div><div class="value" style="font-size:20px">${money(totalContributions)}</div></div>
+      <div class="card"><div class="label">Tổng góp vốn (${periodName})</div><div class="value" style="font-size:20px">${money(totalContributions)}</div></div>
       <div class="card"><div class="label">${openOrdersLabel}</div><div class="value">${openOrders}</div></div>
       <div class="card"><div class="label">Doanh thu (${filteredPeriodLabel})</div><div class="value" style="font-size:20px">${money(revenue)}</div></div>
       <div class="card"><div class="label">${profitLabel}</div><div class="value" style="font-size:20px">${money(profit)}</div></div>
@@ -392,7 +397,7 @@ function renderDashboard() {
       }
     </div>
     <div class="card list-block">
-      <h3>Góp vốn theo người</h3>
+      <h3>Góp vốn theo người (${periodName})</h3>
       ${contributorTotals.length
         ? `<div class="table-wrap"><table><thead><tr><th>Người góp</th><th>Tổng tiền góp</th><th>Tỷ lệ</th></tr></thead><tbody>
           ${contributorTotals.map((item) => {
