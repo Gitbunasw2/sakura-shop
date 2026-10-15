@@ -14,13 +14,70 @@ const STATUSES = {
 let state = { products: [], orders: [], categories: [], contributions: [], invoices: [] };
 let currentView = "dashboard";
 let inventorySearchQuery = "";
+let supabaseClient = null;
+let supabaseSession = null;
+let supabaseSaveQueue = Promise.resolve();
+
+function initializeSupabase() {
+  const config = window.AKI_SUPABASE_CONFIG;
+  if (!config?.url || !config?.anonKey) return false;
+  if (!window.supabase?.createClient) {
+    showSupabaseAuth("Không tải được Supabase client. Hãy kiểm tra kết nối internet.");
+    return false;
+  }
+  if (!supabaseClient) supabaseClient = window.supabase.createClient(config.url, config.anonKey);
+  return true;
+}
+
+function showSupabaseAuth(message = "") {
+  document.getElementById("supabase-auth-error").textContent = message;
+  document.getElementById("supabase-auth-gate").classList.remove("hidden");
+  document.getElementById("btn-signout").classList.add("hidden");
+}
+
+function hideSupabaseAuth() {
+  document.getElementById("supabase-auth-gate").classList.add("hidden");
+  document.getElementById("supabase-auth-error").textContent = "";
+  document.getElementById("btn-signout").classList.remove("hidden");
+}
 
 // Tải dữ liệu: ưu tiên localStorage để dữ liệu mới không bị mất khi reload
 async function loadData() {
+  if (initializeSupabase()) {
+    try {
+      const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+      if (sessionError) throw sessionError;
+      supabaseSession = sessionData.session;
+      if (!supabaseSession) {
+        showSupabaseAuth();
+        return;
+      }
+      hideSupabaseAuth();
+
+      const { data: remoteState, error: stateError } = await supabaseClient
+        .from("shop_state")
+        .select("payload")
+        .eq("id", "main")
+        .maybeSingle();
+      if (stateError) throw stateError;
+      if (remoteState?.payload) {
+        state = normalizeState(remoteState.payload);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        render();
+        return;
+      }
+    } catch (err) {
+      console.error("Lỗi tải dữ liệu Supabase:", err);
+      showSupabaseAuth("Không kết nối được dữ liệu Supabase. Kiểm tra schema, RLS và cấu hình dự án.");
+      return;
+    }
+  }
+
   const rawLocal = localStorage.getItem(STORAGE_KEY);
   if (rawLocal) {
     try {
       state = normalizeState(JSON.parse(rawLocal));
+      if (supabaseClient && supabaseSession) save();
       render();
       return;
     } catch (err) {
@@ -116,6 +173,20 @@ function normalizeState(parsed) {
 
 function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (!supabaseClient || !supabaseSession) return;
+
+  const payload = JSON.parse(JSON.stringify(state));
+  supabaseSaveQueue = supabaseSaveQueue.then(async () => {
+    const { error } = await supabaseClient.from("shop_state").upsert({
+      id: "main",
+      payload,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw error;
+  }).catch((err) => {
+    console.error("Lỗi đồng bộ Supabase:", err);
+    toast("Chưa đồng bộ được lên cloud. Kiểm tra mạng rồi thử lưu lại.");
+  });
 }
 
 function esc(s) {
@@ -1633,6 +1704,38 @@ function importDualFiles(event) {
 }
 
 // Khởi chạy hệ thống
+document.getElementById("supabase-login-form").onsubmit = async (event) => {
+  event.preventDefault();
+  if (!initializeSupabase()) {
+    showSupabaseAuth("Hãy điền URL và anon key của dự án Supabase trong supabase-config.js.");
+    return;
+  }
+
+  const formData = new FormData(event.currentTarget);
+  const { data, error } = await supabaseClient.auth.signInWithPassword({
+    email: formData.get("email"),
+    password: formData.get("password"),
+  });
+  if (error) {
+    showSupabaseAuth("Email hoặc mật khẩu không đúng.");
+    return;
+  }
+  supabaseSession = data.session;
+  hideSupabaseAuth();
+  await loadData();
+};
+
+document.getElementById("btn-signout").onclick = async () => {
+  if (!supabaseClient) return;
+  const { error } = await supabaseClient.auth.signOut();
+  if (error) {
+    toast("Không đăng xuất được");
+    return;
+  }
+  supabaseSession = null;
+  showSupabaseAuth();
+};
+
 loadData();
 
 document.querySelectorAll(".nav-btn").forEach((btn) => {

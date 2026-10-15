@@ -31,6 +31,7 @@
       <div class="sidebar-foot">
         <button id="btn-export" class="ghost" type="button">Xuất backup</button>
         <button id="btn-import" class="ghost" type="button">Nhập backup</button>
+        <button id="btn-signout" class="ghost hidden" type="button">Đăng xuất</button>
       </div>
     </aside>
 
@@ -58,6 +59,20 @@
     </div>
 
     <div id="toast" class="toast hidden"></div>
+    <div id="supabase-auth-gate" class="auth-gate hidden">
+      <section class="auth-card">
+        <h1>Aki Shop</h1>
+        <p>Đăng nhập để đồng bộ dữ liệu cửa hàng.</p>
+        <form id="supabase-login-form" class="stack">
+          <label>Email<input name="email" type="email" autocomplete="username" required /></label>
+          <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" required /></label>
+          <button class="btn sakura" type="submit">Đăng nhập</button>
+          <p id="supabase-auth-error" class="auth-error" role="alert"></p>
+        </form>
+      </section>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
