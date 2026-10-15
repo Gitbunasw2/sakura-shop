@@ -87,6 +87,8 @@ function normalizeState(parsed) {
   orders.forEach((o) => {
     if (o.depositAmount === undefined) o.depositAmount = 0;
     if (o.customerAddress === undefined) o.customerAddress = "";
+    if (o.shippingCarrier === undefined) o.shippingCarrier = "";
+    if (o.trackingNumber === undefined) o.trackingNumber = "";
     (o.items || []).forEach((item) => {
       const product = productsById.get(item.productId);
       if (item.costPrice === undefined) item.costPrice = Number(product?.costPrice) || 0;
@@ -623,6 +625,13 @@ function orderForm(orderId) {
         <label>Ngày tạo đơn<input name="createdDate" id="order-created-date" type="date" required value="${dateInputValue(existingOrder?.createdAt || Date.now())}" /></label>
         <small id="order-date-help" class="full">${existingOrder ? "Có thể chỉnh sửa ngày tạo." : "Đang lấy ngày hiện tại từ internet... Nếu không kết nối được, bạn có thể nhập ngày thủ công."}</small>
         <label class="full">Địa chỉ khách hàng<textarea name="customerAddress" rows="2" placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành phố">${esc(existingOrder?.customerAddress || "")}</textarea></label>
+        <label>Đơn vị vận chuyển
+          <select name="shippingCarrier">
+            <option value="">Chưa chọn</option>
+            ${["SPX", "J&T", "Viettel Post", "EMS"].map((carrier) => `<option value="${carrier}" ${existingOrder?.shippingCarrier === carrier ? "selected" : ""}>${carrier}</option>`).join("")}
+          </select>
+        </label>
+        <label>Mã vận đơn<input name="trackingNumber" value="${esc(existingOrder?.trackingNumber || "")}" placeholder="Nhập mã vận đơn" /></label>
         <label>Phí vận chuyển (đ)<input name="shippingFee" id="order-shipping-fee" type="number" min="0" step="1" placeholder="0" value="${existingOrder?.shippingFee || ""}" /></label>
         <label>Trạng thái
           <select name="status" id="new-order-status">
@@ -664,7 +673,7 @@ function orderForm(orderId) {
       }
     }).catch(() => {
       if (document.getElementById("order-created-date") === createdDateInput) {
-        dateHelp.textContent = "Không lấy được ngày từ internet. Hãy nhập ngày tạo thủ công.";
+        dateHelp.textContent = "";
       }
     });
   }
@@ -812,6 +821,8 @@ function submitOrder(e, orderId) {
     customerName: fd.get("customerName").trim(),
     customerPhone: fd.get("customerPhone").trim(),
     customerAddress: fd.get("customerAddress").trim(),
+    shippingCarrier: fd.get("shippingCarrier"),
+    trackingNumber: fd.get("trackingNumber").trim(),
     note: fd.get("note").trim(),
     items,
     shippingFee,
@@ -838,6 +849,8 @@ function orderDetail(id) {
     <p>Ngày tạo: ${formatOrderDate(o.createdAt)}</p>
     <p><strong>${o.customerName}</strong> · ${o.customerPhone || "—"}</p>
     <p>Địa chỉ: ${esc(o.customerAddress || "—")}</p>
+    <p>Đơn vị vận chuyển: ${esc(o.shippingCarrier || "—")}</p>
+    <p>Mã vận đơn: ${esc(o.trackingNumber || "—")}</p>
     <table><thead><tr><th>SP</th><th>SL</th><th>Giá</th></tr></thead>
     <tbody>${o.items.map((i) => `<tr><td>${i.sku}${i.name}</td><td>${i.qty}</td><td>${money(i.qty * i.price)}</td></tr>`).join("")}</tbody></table>
     <p>Phí vận chuyển: ${money(o.shippingFee || 0)}</p>
