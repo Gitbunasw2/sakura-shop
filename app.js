@@ -278,19 +278,21 @@ function renderDashboard() {
   const low = state.products.filter((p) => p.stock <= p.minStock);
   const sku = state.products.length;
   const units = state.products.reduce((s, p) => s + Number(p.stock), 0);
-  const openOrders = state.orders.filter((o) => !["done", "cancelled"].includes(o.status)).length;
-  const revenue = state.orders
-    .filter((o) => o.status !== "cancelled")
-    .reduce((s, o) => s + o.total, 0);
-  const profit = state.orders
-    .filter((o) => o.status !== "cancelled" && (period === "year" || orderMatchesPeriod(o, period, selectedDate)))
+  const periodOrders = state.orders.filter((order) =>
+    order.status !== "cancelled" && (period === "year" || orderMatchesPeriod(order, period, selectedDate))
+  );
+  const openOrders = periodOrders.filter((order) => order.status !== "done").length;
+  const revenue = periodOrders.reduce((sum, order) => sum + order.total, 0);
+  const profit = periodOrders
     .reduce((sum, order) => sum + orderProfit(order), 0);
   const periodLabels = { day: "ngày", week: "tuần", month: "tháng", year: "năm" };
   const profitLabel = period === "year" ? "Lợi nhuận (chưa hủy)" : `Lợi nhuận (${periodLabels[period]})`;
+  const filteredPeriodLabel = period === "year" ? "chưa hủy" : `${periodLabels[period]}, chưa hủy`;
+  const openOrdersLabel = period === "year" ? "Đơn đang xử lý" : `Đơn đang xử lý (${periodLabels[period]})`;
 
   document.getElementById("view-dashboard").innerHTML = `
     <div class="toolbar dashboard-filters">
-      <label>Kỳ lợi nhuận
+      <label>Kỳ thống kê
         <select id="profit-period">
           <option value="day" ${period === "day" ? "selected" : ""}>Ngày</option>
           <option value="week" ${period === "week" ? "selected" : ""}>Tuần</option>
@@ -303,8 +305,8 @@ function renderDashboard() {
     <div class="cards">
       <div class="card"><div class="label">Mã hàng</div><div class="value">${sku}</div></div>
       <div class="card"><div class="label">Tổng tồn</div><div class="value">${units}</div></div>
-      <div class="card"><div class="label">Đơn đang xử lý</div><div class="value">${openOrders}</div></div>
-      <div class="card"><div class="label">Doanh thu (chưa hủy)</div><div class="value" style="font-size:20px">${money(revenue)}</div></div>
+      <div class="card"><div class="label">${openOrdersLabel}</div><div class="value">${openOrders}</div></div>
+      <div class="card"><div class="label">Doanh thu (${filteredPeriodLabel})</div><div class="value" style="font-size:20px">${money(revenue)}</div></div>
       <div class="card"><div class="label">${profitLabel}</div><div class="value" style="font-size:20px">${money(profit)}</div></div>
     </div>
     <div class="card list-block">
