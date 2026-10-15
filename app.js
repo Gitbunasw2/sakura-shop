@@ -11,7 +11,7 @@ const STATUSES = {
   cancelled: "Đã hủy",
 };
 
-let state = { products: [], orders: [], categories: [] };
+let state = { products: [], orders: [], categories: [], contributions: [] };
 let currentView = "dashboard";
 
 // Tải dữ liệu: ưu tiên localStorage để dữ liệu mới không bị mất khi reload
@@ -44,7 +44,8 @@ async function loadData() {
     state = normalizeState({
       products: storeData.products || [],
       categories: storeData.categories || [],
-      orders: orderData.orders || []
+      orders: orderData.orders || [],
+      contributions: orderData.contributions || []
     });
 
     save();
@@ -62,6 +63,7 @@ async function loadData() {
 function normalizeState(parsed) {
   const products = parsed.products || [];
   const orders = parsed.orders || [];
+  const contributions = Array.isArray(parsed.contributions) ? parsed.contributions : [];
   let categories = Array.isArray(parsed.categories) ? parsed.categories.filter((c) => c && c.id && c.name) : [];
   const known = new Set(categories.map((c) => c.id));
   
@@ -96,7 +98,7 @@ function normalizeState(parsed) {
       if (item.packagingFee === undefined) item.packagingFee = Number(product?.packagingFee) || 0;
     });
   });
-  return { products, orders, categories };
+  return { products, orders, categories, contributions };
 }
 
 function save() {
@@ -230,7 +232,8 @@ function setView(view) {
   document.getElementById("view-dashboard").classList.toggle("hidden", view !== "dashboard");
   document.getElementById("view-inventory").classList.toggle("hidden", view !== "inventory");
   document.getElementById("view-orders").classList.toggle("hidden", view !== "orders");
-  const titles = { dashboard: "Tổng quan", inventory: "Kho hàng", orders: "Đơn hàng" };
+  document.getElementById("view-contributions").classList.toggle("hidden", view !== "contributions");
+  const titles = { dashboard: "Tổng quan", inventory: "Kho hàng", orders: "Đơn hàng", contributions: "Góp vốn" };
   document.getElementById("page-title").textContent = titles[view];
   render();
 }
@@ -265,6 +268,10 @@ function render() {
     actions.innerHTML = `<button class="btn sakura" id="add-order">Tạo đơn hàng</button>`;
     document.getElementById("add-order").onclick = () => orderForm();
     renderOrders();
+  } else if (currentView === "contributions") {
+    actions.innerHTML = `<button class="btn sakura" id="add-contribution">Thêm khoản góp vốn</button>`;
+    document.getElementById("add-contribution").onclick = () => contributionForm();
+    renderContributions();
   } else {
     actions.innerHTML = `<button class="btn sakura" id="quick-order">Tạo đơn nhanh</button>`;
     document.getElementById("quick-order").onclick = () => orderForm();
@@ -692,6 +699,85 @@ function renderOrders() {
   });
 }
 
+function renderContributions() {
+  const contributions = [...state.contributions].sort((a, b) => b.date.localeCompare(a.date));
+  const total = contributions.reduce((sum, contribution) => sum + Number(contribution.amount || 0), 0);
+
+  document.getElementById("view-contributions").innerHTML = `
+    <div class="cards">
+      <div class="card"><div class="label">Tổng vốn góp</div><div class="value" style="font-size:20px">${money(total)}</div></div>
+      <div class="card"><div class="label">Số lần góp</div><div class="value">${contributions.length}</div></div>
+    </div>
+    ${contributions.length
+      ? `<div class="table-wrap"><table><thead><tr><th>Ngày góp vốn</th><th>Người góp</th><th>Số tiền</th><th></th></tr></thead><tbody>
+        ${contributions.map((contribution) => `<tr>
+          <td>${formatOrderDate(new Date(`${contribution.date}T12:00:00`).getTime())}</td>
+          <td><strong>${esc(contribution.contributor)}</strong></td>
+          <td>${money(contribution.amount)}</td>
+          <td class="row-actions">
+            <button class="btn secondary" data-contribution-edit="${esc(contribution.id)}">Sửa</button>
+            <button class="btn danger" data-contribution-delete="${esc(contribution.id)}">Xóa</button>
+          </td>
+        </tr>`).join("")}
+      </tbody></table></div>`
+      : `<div class="card empty">Chưa có khoản góp vốn.</div>`}
+  `;
+
+  document.querySelectorAll("[data-contribution-edit]").forEach((button) => {
+    button.onclick = () => contributionForm(button.dataset.contributionEdit);
+  });
+  document.querySelectorAll("[data-contribution-delete]").forEach((button) => {
+    button.onclick = () => deleteContribution(button.dataset.contributionDelete);
+  });
+}
+
+function contributionForm(id) {
+  const contribution = id ? state.contributions.find((item) => item.id === id) : null;
+  if (id && !contribution) return;
+
+  openModal(id ? "Sửa khoản góp vốn" : "Thêm khoản góp vốn", `
+    <form id="contribution-form" class="form-grid">
+      <label>Ngày góp vốn<input name="date" type="date" required value="${contribution?.date || dateInputValue(Date.now())}" /></label>
+      <label>Người góp<input name="contributor" required maxlength="100" value="${esc(contribution?.contributor || "")}" placeholder="Tên người góp vốn" /></label>
+      <label class="full">Số tiền (đ)<input name="amount" type="number" min="1" step="1" required value="${contribution?.amount || ""}" /></label>
+      <div class="form-actions full">
+        <button type="button" class="btn secondary" id="cancel-modal">Hủy</button>
+        <button class="btn" type="submit">${id ? "Lưu thay đổi" : "Lưu khoản góp"}</button>
+      </div>
+    </form>
+  `);
+
+  document.getElementById("cancel-modal").onclick = closeModal;
+  document.getElementById("contribution-form").onsubmit = (event) => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(event.target).entries());
+    const amount = Number(data.amount);
+    if (!Number.isFinite(amount) || amount <= 0) return toast("Số tiền góp phải lớn hơn 0");
+
+    const record = {
+      id: contribution?.id || uid("capital"),
+      date: data.date,
+      contributor: data.contributor.trim(),
+      amount,
+    };
+    if (contribution) Object.assign(contribution, record);
+    else state.contributions.unshift(record);
+    save();
+    closeModal();
+    toast(contribution ? "Đã cập nhật khoản góp vốn" : "Đã thêm khoản góp vốn");
+    renderContributions();
+  };
+}
+
+function deleteContribution(id) {
+  const contribution = state.contributions.find((item) => item.id === id);
+  if (!contribution || !confirm(`Xóa khoản góp vốn của ${contribution.contributor}?`)) return;
+  state.contributions = state.contributions.filter((item) => item.id !== id);
+  save();
+  toast("Đã xóa khoản góp vốn");
+  renderContributions();
+}
+
 function orderForm(orderId) {
   const existingOrder = orderId ? state.orders.find((order) => order.id === orderId) : null;
   if (orderId && !existingOrder) return;
@@ -1027,7 +1113,8 @@ function exportStoreData() {
 
 function exportOrderData() {
   const orderData = {
-    orders: state.orders
+    orders: state.orders,
+    contributions: state.contributions
   };
   downloadJSON(orderData, "order_data.json");
 }
@@ -1086,7 +1173,8 @@ function openImportBackupModal() {
       state = normalizeState({
         products: storeData.products || [],
         categories: storeData.categories || [],
-        orders: orderData.orders || []
+        orders: orderData.orders || [],
+        contributions: orderData.contributions || []
       });
 
       save();
@@ -1135,6 +1223,7 @@ function importDualFiles(event) {
         }
         if (loadedOrders) {
           if (loadedOrders.orders) state.orders = loadedOrders.orders;
+          if (loadedOrders.contributions) state.contributions = loadedOrders.contributions;
         }
 
         state = normalizeState(state);
