@@ -278,6 +278,12 @@ function renderDashboard() {
   const low = state.products.filter((p) => p.stock <= p.minStock);
   const sku = state.products.length;
   const units = state.products.reduce((s, p) => s + Number(p.stock), 0);
+  const inventoryValue = state.products.reduce((sum, product) => {
+    const unitCost = Number(product.costPrice || 0)
+      + Number(product.shippingFee || 0)
+      + Number(product.packagingFee || 0);
+    return sum + Number(product.stock || 0) * unitCost;
+  }, 0);
   const periodOrders = state.orders.filter((order) =>
     order.status !== "cancelled" && (period === "year" || orderMatchesPeriod(order, period, selectedDate))
   );
@@ -305,6 +311,7 @@ function renderDashboard() {
     <div class="cards">
       <div class="card"><div class="label">Mã hàng</div><div class="value">${sku}</div></div>
       <div class="card"><div class="label">Tổng tồn</div><div class="value">${units}</div></div>
+      <div class="card"><div class="label">Tổng giá trị kho hàng</div><div class="value" style="font-size:20px">${money(inventoryValue)}</div></div>
       <div class="card"><div class="label">${openOrdersLabel}</div><div class="value">${openOrders}</div></div>
       <div class="card"><div class="label">Doanh thu (${filteredPeriodLabel})</div><div class="value" style="font-size:20px">${money(revenue)}</div></div>
       <div class="card"><div class="label">${profitLabel}</div><div class="value" style="font-size:20px">${money(profit)}</div></div>
