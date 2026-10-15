@@ -695,7 +695,7 @@ function renderOrders() {
 
 function orderForm(orderId) {
   const existingOrder = orderId ? state.orders.find((order) => order.id === orderId) : null;
-  if (orderId && (!existingOrder || existingOrder.status === "cancelled")) return;
+  if (orderId && !existingOrder) return;
   const sellable = state.products.filter((p) => p.stock > 0);
   if (!sellable.length && !existingOrder) {
     toast("Kho trống — thêm sản phẩm trước");
@@ -855,7 +855,7 @@ function submitOrder(e, orderId) {
   }
 
   const originalQuantities = new Map();
-  if (existingOrder) {
+  if (existingOrder && existingOrder.status !== "cancelled") {
     existingOrder.items.forEach((item) => {
       originalQuantities.set(item.productId, (originalQuantities.get(item.productId) || 0) + item.qty);
     });
@@ -891,7 +891,7 @@ function submitOrder(e, orderId) {
     return toast("Tổng đơn không thể thấp hơn số tiền khách đã thanh toán");
   }
 
-  if (existingOrder) {
+  if (existingOrder && existingOrder.status !== "cancelled") {
     existingOrder.items.forEach((item) => {
       const product = productById(item.productId);
       if (product) product.stock += item.qty;
@@ -954,7 +954,7 @@ function orderDetail(id) {
       <input id="edit-deposit-amount" type="number" min="1" step="1" value="${o.depositAmount || ""}" ${o.status === "deposited" ? "required" : ""} />
     </label>
     <div class="form-actions">
-      ${o.status !== "cancelled" ? `<button class="btn secondary" id="edit-order">Sửa đơn</button>` : ""}
+      <button class="btn secondary" id="edit-order">Sửa đơn</button>
       ${o.status !== "cancelled" && o.status !== "done" ? `<button class="btn danger" id="cancel-order">Hủy đơn (hoàn kho)</button>` : ""}
       <button class="btn" id="save-st">Lưu trạng thái</button>
     </div>
