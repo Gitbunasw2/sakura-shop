@@ -160,7 +160,9 @@ function orderProfit(order) {
 }
 
 function orderAmountDue(order) {
-  const paidAmount = order.status === "paid" ? order.total : Number(order.depositAmount || 0);
+  const paidAmount = ["paid", "done"].includes(order.status)
+    ? order.total
+    : Number(order.depositAmount || 0);
   return Math.max(0, Number(order.total || 0) - paidAmount);
 }
 
@@ -670,7 +672,7 @@ function updateOrderPaymentSummary() {
   const total = productTotal + shippingFee;
   const status = document.getElementById("new-order-status")?.value;
   const depositAmount = Number(document.getElementById("new-deposit-amount")?.value) || 0;
-  const paidAmount = status === "paid" ? total : status === "deposited" ? depositAmount : 0;
+  const paidAmount = ["paid", "done"].includes(status) ? total : status === "deposited" ? depositAmount : 0;
   const totalElement = document.getElementById("new-order-total");
   const dueElement = document.getElementById("new-order-amount-due");
   if (totalElement) totalElement.textContent = money(total);
@@ -728,7 +730,7 @@ function submitOrder(e, orderId) {
     if (!Number.isFinite(depositAmount) || depositAmount <= 0 || depositAmount > total) {
       return toast("Tiền cọc phải lớn hơn 0 và không vượt quá tổng đơn");
     }
-  } else if (status === "paid") {
+  } else if (["paid", "done"].includes(status)) {
     depositAmount = total;
   }
   if (depositAmount > total) {
@@ -778,7 +780,7 @@ function orderDetail(id) {
     <p>Phí vận chuyển: ${money(o.shippingFee || 0)}</p>
     <p style="margin-top:12px"><strong>Tổng: ${money(o.total)}</strong></p>
     <p>Lợi nhuận đơn: <strong>${money(orderProfit(o))}</strong></p>
-    <p>Đã thanh toán: <strong id="order-paid-amount">${money(o.status === "paid" ? o.total : o.depositAmount || 0)}</strong></p>
+    <p>Đã thanh toán: <strong id="order-paid-amount">${money(["paid", "done"].includes(o.status) ? o.total : o.depositAmount || 0)}</strong></p>
     <p>Còn phải trả: <strong id="order-remaining-amount">${money(orderAmountDue(o))}</strong></p>
     <label>Trạng thái
       <select id="st-change" ${o.status === "cancelled" ? "disabled" : ""}>
@@ -813,7 +815,7 @@ function orderDetail(id) {
         return toast("Tiền cọc phải lớn hơn 0 và không vượt quá tổng đơn");
       }
       o.depositAmount = amount;
-    } else if (nextStatus === "paid") {
+    } else if (["paid", "done"].includes(nextStatus)) {
       o.depositAmount = o.total;
     }
     o.status = nextStatus;
