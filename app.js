@@ -89,6 +89,7 @@ function normalizeState(parsed) {
   const productsById = new Map(products.map((product) => [product.id, product]));
   orders.forEach((o) => {
     if (o.depositAmount === undefined) o.depositAmount = 0;
+    if (o.shippingPayer === undefined) o.shippingPayer = "shop";
     if (o.customerAddress === undefined) o.customerAddress = "";
     if (o.shippingCarrier === undefined) o.shippingCarrier = "";
     if (o.trackingNumber === undefined) o.trackingNumber = "";
@@ -167,7 +168,8 @@ function orderProfit(order) {
       - Number(item.packagingFee || 0);
     return sum + unitProfit * Number(item.qty || 0);
   }, 0);
-  return productProfit - Number(order.shippingFee || 0);
+  const shopShippingCost = order.shippingPayer === "customer" ? 0 : Number(order.shippingFee || 0);
+  return productProfit - shopShippingCost;
 }
 
 function orderAmountDue(order) {
@@ -853,6 +855,11 @@ function orderForm(orderId) {
         </label>
         <label>Mã vận đơn<input name="trackingNumber" value="${esc(existingOrder?.trackingNumber || "")}" placeholder="Nhập mã vận đơn" /></label>
         <label>Phí vận chuyển (đ)<input name="shippingFee" id="order-shipping-fee" type="number" min="0" step="1" placeholder="0" value="${existingOrder?.shippingFee || ""}" /></label>
+        <label class="shipping-payer-toggle full">
+          <input id="shipping-paid-by-customer" name="shippingPaidByCustomer" type="checkbox" ${existingOrder?.shippingPayer === "customer" ? "checked" : ""} />
+          <span class="shipping-payer-switch" aria-hidden="true"></span>
+          <span id="shipping-payer-label">${existingOrder?.shippingPayer === "customer" ? "Khách hàng trả phí vận chuyển" : "Shop trả phí vận chuyển"}</span>
+        </label>
         <label>Trạng thái
           <select name="status" id="new-order-status">
             ${availableStatuses.map((status) => `<option value="${status}" ${status === (existingOrder?.status || "new") ? "selected" : ""}>${STATUSES[status]}</option>`).join("")}
@@ -907,6 +914,13 @@ function orderForm(orderId) {
     updateOrderPaymentSummary();
   };
   document.getElementById("order-shipping-fee").oninput = updateOrderPaymentSummary;
+  const shippingPayerToggle = document.getElementById("shipping-paid-by-customer");
+  shippingPayerToggle.onchange = () => {
+    document.getElementById("shipping-payer-label").textContent = shippingPayerToggle.checked
+      ? "Khách hàng trả phí vận chuyển"
+      : "Shop trả phí vận chuyển";
+    updateOrderPaymentSummary();
+  };
   depositInput.oninput = updateOrderPaymentSummary;
   if (existingOrder) {
     existingOrder.items.forEach((item) => addLine(item.productId, item.qty));
@@ -1042,7 +1056,8 @@ function updateOrderPaymentSummary() {
     return sum + (product ? product.price * quantity : 0);
   }, 0);
   const shippingFee = Math.max(0, Number(document.getElementById("order-shipping-fee")?.value) || 0);
-  const total = productTotal + shippingFee;
+  const customerPaysShipping = document.getElementById("shipping-paid-by-customer")?.checked || false;
+  const total = productTotal + (customerPaysShipping ? shippingFee : 0);
   const status = document.getElementById("new-order-status")?.value;
   const depositAmount = Number(document.getElementById("new-deposit-amount")?.value) || 0;
   const paidAmount = ["paid", "done", "cancelled"].includes(status)
@@ -1100,7 +1115,9 @@ function submitOrder(e, orderId) {
   if (!Number.isFinite(shippingFee) || shippingFee < 0) {
     return toast("Phí vận chuyển không hợp lệ");
   }
-  const total = items.reduce((sum, item) => sum + item.qty * item.price, 0) + shippingFee;
+  const shippingPayer = fd.has("shippingPaidByCustomer") ? "customer" : "shop";
+  const total = items.reduce((sum, item) => sum + item.qty * item.price, 0)
+    + (shippingPayer === "customer" ? shippingFee : 0);
   const [year, month, day] = String(fd.get("createdDate") || "").split("-").map(Number);
   const createdDate = new Date(year, month - 1, day, 12);
   if (!year || !month || !day || createdDate.getFullYear() !== year || createdDate.getMonth() !== month - 1 || createdDate.getDate() !== day) {
@@ -1141,6 +1158,7 @@ function submitOrder(e, orderId) {
     note: fd.get("note").trim(),
     items,
     shippingFee,
+    shippingPayer,
     status,
     depositAmount,
     total,
@@ -1168,7 +1186,7 @@ function orderDetail(id) {
     <p>Mã vận đơn: ${esc(o.trackingNumber || "—")}</p>
     <table><thead><tr><th>SP</th><th>SL</th><th>Giá</th></tr></thead>
     <tbody>${o.items.map((i) => `<tr><td>${i.sku}${i.name}</td><td>${i.qty}</td><td>${money(i.qty * i.price)}</td></tr>`).join("")}</tbody></table>
-    <p>Phí vận chuyển: ${money(o.shippingFee || 0)}</p>
+    <p>Phí vận chuyển: ${money(o.shippingFee || 0)} · ${o.shippingPayer === "customer" ? "Khách hàng trả" : "Shop trả"}</p>
     <p style="margin-top:12px"><strong>Tổng: ${money(o.total)}</strong></p>
     <p>Lợi nhuận đơn: <strong>${money(orderProfit(o))}</strong></p>
     <p>Đã thanh toán: <strong id="order-paid-amount">${money(["paid", "done"].includes(o.status) ? o.total : o.depositAmount || 0)}</strong></p>
