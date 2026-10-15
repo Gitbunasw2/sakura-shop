@@ -72,6 +72,7 @@ function normalizeState(parsed) {
     if (p.weight === undefined) p.weight = 0;
     if (p.shippingFee === undefined) p.shippingFee = 0;
     if (p.packagingFee === undefined) p.packagingFee = 0;
+    if (p.sourceUrl === undefined) p.sourceUrl = "";
     if (!p.color && typeof p.variant === "string" && p.variant.includes("/")) {
       const [size, ...colorParts] = p.variant.split("/");
       p.variant = size.trim();
@@ -256,7 +257,7 @@ function renderInventory() {
     ${
       rows.length
         ? `<div class="table-wrap"><table><thead><tr>
-          <th>SKU</th><th>Sản phẩm</th><th>Brand</th><th>Size</th><th>Màu sắc</th><th>Nhóm</th><th>Tồn</th><th>Giá gốc JPY</th><th>Giá gốc VNĐ</th><th>Trọng lượng</th><th>Phí vận chuyển</th><th>Phí bao bì</th><th>Giá bán</th><th>Lợi nhuận</th><th></th>
+          <th>SKU</th><th>Sản phẩm</th><th>Link gốc</th><th>Brand</th><th>Size</th><th>Màu sắc</th><th>Nhóm</th><th>Tồn</th><th>Giá gốc JPY</th><th>Giá gốc VNĐ</th><th>Trọng lượng</th><th>Phí vận chuyển</th><th>Phí bao bì</th><th>Giá bán</th><th>Lợi nhuận</th><th></th>
         </tr></thead><tbody>
         ${rows
           .map((p) => {
@@ -268,6 +269,7 @@ function renderInventory() {
             return `<tr>
               <td>${esc(p.sku)}</td>
               <td><strong>${esc(p.name)}</strong></td>
+              <td>${p.sourceUrl ? `<a href="${esc(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Mở link</a>` : "—"}</td>
               <td>${esc(p.brand || "—")}</td>
               <td>${esc(p.variant || "—")}</td>
               <td>${esc(p.color || "—")}</td>
@@ -322,6 +324,7 @@ function productForm(id) {
     weight: 0,
     shippingFee: 0,
     packagingFee: 0,
+    sourceUrl: "",
     price: 0,
   };
   openModal(id ? "Sửa sản phẩm" : "Thêm sản phẩm", `
@@ -333,6 +336,7 @@ function productForm(id) {
         </select>
       </label>
       <label class="full">Tên sản phẩm<input name="name" required value="${esc(p.name || "")}" /></label>
+      <label class="full">Link sản phẩm gốc<input name="sourceUrl" type="url" value="${esc(p.sourceUrl || "")}" placeholder="https://..." /></label>
       <label>Brand<input name="brand" value="${esc(p.brand || "")}" /></label>
       <label>Size / dung tích<input name="variant" value="${esc(p.variant || "")}" placeholder="M / 170ml" /></label>
       <label>Màu sắc<input name="color" value="${esc(p.color || "")}" placeholder="Trắng / Đen" /></label>
