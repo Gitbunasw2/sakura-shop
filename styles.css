@@ -374,6 +374,7 @@ th {
   display: grid;
   gap: 3px;
   width: 100%;
+  min-width: 0;
   padding: 10px 12px;
   border: 0;
   border-radius: 5px;
@@ -381,6 +382,12 @@ th {
   color: var(--ink);
   text-align: left;
   cursor: pointer;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.product-suggestion span {
+  line-height: 1.35;
 }
 
 .product-suggestion:hover,

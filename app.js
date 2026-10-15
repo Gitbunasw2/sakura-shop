@@ -927,7 +927,7 @@ function productsForOrderSearch(query) {
 
 function productOptionLabel(product) {
   const details = [product.variant, product.color].filter(Boolean).join(" / ");
-  return `${product.sku} — ${product.name}${details ? ` (${details})` : ""} · ${money(product.price)} · tồn ${product.stock}`;
+  return `${product.sku} — ${product.name}${details ? ` (${details})` : ""}`;
 }
 
 function renderProductSuggestions(list, query, onSelect) {
