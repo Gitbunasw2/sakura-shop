@@ -159,6 +159,11 @@ function orderProfit(order) {
   return productProfit - Number(order.shippingFee || 0);
 }
 
+function orderAmountDue(order) {
+  const paidAmount = order.status === "paid" ? order.total : Number(order.depositAmount || 0);
+  return Math.max(0, Number(order.total || 0) - paidAmount);
+}
+
 function toast(msg) {
   const el = document.getElementById("toast");
   if (!el) return;
@@ -544,7 +549,7 @@ function renderOrders() {
     ${
       rows.length
         ? `<table><thead><tr>
-          <th>Mã</th><th>Khách</th><th>Món</th><th>Tổng</th><th>Lợi nhuận</th><th>Trạng thái</th><th></th>
+          <th>Mã</th><th>Khách</th><th>Món</th><th>Tổng</th><th>Khách cần thanh toán</th><th>Lợi nhuận</th><th>Trạng thái</th><th></th>
         </tr></thead><tbody>
         ${rows.map((o) => {
           const count = o.items.reduce((s, i) => s + i.qty, 0);
@@ -553,6 +558,7 @@ function renderOrders() {
             <td><strong>${o.customerName}</strong><br><span style="color:var(--muted)">${o.customerPhone || ""}</span></td>
             <td>${count} sp</td>
             <td>${money(o.total)}</td>
+            <td><strong>${money(orderAmountDue(o))}</strong></td>
             <td><strong>${money(orderProfit(o))}</strong></td>
             <td><span class="badge status-${o.status}">${STATUSES[o.status]}</span></td>
             <td class="row-actions"><button class="btn secondary" data-view-order="${o.id}">Chi tiết</button></td>
@@ -773,7 +779,7 @@ function orderDetail(id) {
     <p style="margin-top:12px"><strong>Tổng: ${money(o.total)}</strong></p>
     <p>Lợi nhuận đơn: <strong>${money(orderProfit(o))}</strong></p>
     <p>Đã thanh toán: <strong id="order-paid-amount">${money(o.status === "paid" ? o.total : o.depositAmount || 0)}</strong></p>
-    <p>Còn phải trả: <strong id="order-remaining-amount">${money(Math.max(0, o.total - (o.status === "paid" ? o.total : o.depositAmount || 0)))}</strong></p>
+    <p>Còn phải trả: <strong id="order-remaining-amount">${money(orderAmountDue(o))}</strong></p>
     <label>Trạng thái
       <select id="st-change" ${o.status === "cancelled" ? "disabled" : ""}>
         ${Object.entries(STATUSES).filter(([k]) => k !== "cancelled").map(([k, v]) => `<option value="${k}" ${o.status === k ? "selected" : ""}>${v}</option>`).join("")}
