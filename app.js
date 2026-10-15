@@ -83,8 +83,15 @@ function normalizeState(parsed) {
     }
     if (p.color === undefined) p.color = "";
   });
+  const productsById = new Map(products.map((product) => [product.id, product]));
   orders.forEach((o) => {
     if (o.depositAmount === undefined) o.depositAmount = 0;
+    (o.items || []).forEach((item) => {
+      const product = productsById.get(item.productId);
+      if (item.costPrice === undefined) item.costPrice = Number(product?.costPrice) || 0;
+      if (item.productShippingFee === undefined) item.productShippingFee = Number(product?.shippingFee) || 0;
+      if (item.packagingFee === undefined) item.packagingFee = Number(product?.packagingFee) || 0;
+    });
   });
   return { products, orders, categories };
 }
@@ -139,6 +146,17 @@ function moneyJpy(n) {
     currency: "JPY",
     maximumFractionDigits: 0
   }).format(n || 0);
+}
+
+function orderProfit(order) {
+  const productProfit = order.items.reduce((sum, item) => {
+    const unitProfit = Number(item.price || 0)
+      - Number(item.costPrice || 0)
+      - Number(item.productShippingFee || 0)
+      - Number(item.packagingFee || 0);
+    return sum + unitProfit * Number(item.qty || 0);
+  }, 0);
+  return productProfit - Number(order.shippingFee || 0);
 }
 
 function toast(msg) {
@@ -526,7 +544,7 @@ function renderOrders() {
     ${
       rows.length
         ? `<table><thead><tr>
-          <th>Mã</th><th>Khách</th><th>Món</th><th>Tổng</th><th>Trạng thái</th><th></th>
+          <th>Mã</th><th>Khách</th><th>Món</th><th>Tổng</th><th>Lợi nhuận</th><th>Trạng thái</th><th></th>
         </tr></thead><tbody>
         ${rows.map((o) => {
           const count = o.items.reduce((s, i) => s + i.qty, 0);
@@ -535,6 +553,7 @@ function renderOrders() {
             <td><strong>${o.customerName}</strong><br><span style="color:var(--muted)">${o.customerPhone || ""}</span></td>
             <td>${count} sp</td>
             <td>${money(o.total)}</td>
+            <td><strong>${money(orderProfit(o))}</strong></td>
             <td><span class="badge status-${o.status}">${STATUSES[o.status]}</span></td>
             <td class="row-actions"><button class="btn secondary" data-view-order="${o.id}">Chi tiết</button></td>
           </tr>`;
@@ -667,7 +686,16 @@ function submitOrder(e, orderId) {
     const p = productById(pid);
     if (!p || !Number.isInteger(qty) || qty < 1) return toast("Số lượng không hợp lệ");
     requestedQuantities.set(pid, (requestedQuantities.get(pid) || 0) + qty);
-    items.push({ productId: p.id, name: p.name, sku: p.sku, qty, price: p.price });
+    items.push({
+      productId: p.id,
+      name: p.name,
+      sku: p.sku,
+      qty,
+      price: p.price,
+      costPrice: Number(p.costPrice) || 0,
+      productShippingFee: Number(p.shippingFee) || 0,
+      packagingFee: Number(p.packagingFee) || 0,
+    });
   }
 
   const originalQuantities = new Map();
@@ -743,6 +771,7 @@ function orderDetail(id) {
     <tbody>${o.items.map((i) => `<tr><td>${i.sku}${i.name}</td><td>${i.qty}</td><td>${money(i.qty * i.price)}</td></tr>`).join("")}</tbody></table>
     <p>Phí vận chuyển: ${money(o.shippingFee || 0)}</p>
     <p style="margin-top:12px"><strong>Tổng: ${money(o.total)}</strong></p>
+    <p>Lợi nhuận đơn: <strong>${money(orderProfit(o))}</strong></p>
     <p>Đã thanh toán: <strong id="order-paid-amount">${money(o.status === "paid" ? o.total : o.depositAmount || 0)}</strong></p>
     <p>Còn phải trả: <strong id="order-remaining-amount">${money(Math.max(0, o.total - (o.status === "paid" ? o.total : o.depositAmount || 0)))}</strong></p>
     <label>Trạng thái
