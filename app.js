@@ -71,6 +71,13 @@ function normalizeState(parsed) {
     if (p.costPriceJpy === undefined) p.costPriceJpy = Number(Math.round((p.costPrice || 0) / 180));
     if (p.weight === undefined) p.weight = 0;
     if (p.shippingFee === undefined) p.shippingFee = 0;
+    if (p.packagingFee === undefined) p.packagingFee = 0;
+    if (!p.color && typeof p.variant === "string" && p.variant.includes("/")) {
+      const [size, ...colorParts] = p.variant.split("/");
+      p.variant = size.trim();
+      p.color = colorParts.join("/").trim();
+    }
+    if (p.color === undefined) p.color = "";
   });
   return { products, orders, categories };
 }
@@ -87,6 +94,14 @@ function esc(s) {
     '"': "&quot;",
     "'": "&#39;",
   }[c]));
+}
+
+function normalizeText(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
 function categoryById(id) {
@@ -213,10 +228,19 @@ function renderDashboard() {
 }
 
 function renderInventory() {
-  const q = (document.getElementById("inv-q")?.value || "").toLowerCase();
+  const q = (document.getElementById("inv-q")?.value || "");
+  const searchValue = normalizeText(q);
   const cat = document.getElementById("inv-cat")?.value || "";
   const rows = state.products.filter((p) => {
-    const matchQ = [p.sku, p.name, p.brand, p.variant].join(" ").toLowerCase().includes(q);
+    const haystack = [
+      p.sku,
+      p.name,
+      p.brand,
+      p.variant,
+      p.color,
+      categoryName(p.category),
+    ].map((value) => normalizeText(value)).join(" ");
+    const matchQ = !searchValue || haystack.includes(searchValue);
     const matchC = !cat || p.category === cat;
     return matchQ && matchC;
   });
@@ -232,20 +256,24 @@ function renderInventory() {
     ${
       rows.length
         ? `<table><thead><tr>
-          <th>SKU</th><th>Sản phẩm</th><th>Nhóm</th><th>Tồn</th><th>Giá gốc JPY</th><th>Giá gốc VNĐ</th><th>Trọng lượng</th><th>Phí vận chuyển</th><th>Giá bán</th><th></th>
+          <th>SKU</th><th>Sản phẩm</th><th>Brand</th><th>Size</th><th>Màu sắc</th><th>Nhóm</th><th>Tồn</th><th>Giá gốc JPY</th><th>Giá gốc VNĐ</th><th>Trọng lượng</th><th>Phí vận chuyển</th><th>Phí bao bì</th><th>Giá bán</th><th></th>
         </tr></thead><tbody>
         ${rows
           .map((p) => {
             const low = p.stock <= p.minStock;
             return `<tr>
               <td>${esc(p.sku)}</td>
-              <td><strong>${esc(p.name)}</strong><br><span style="color:var(--muted)">${esc(p.brand)} · ${esc(p.variant || "—")}</span></td>
+              <td><strong>${esc(p.name)}</strong></td>
+              <td>${esc(p.brand || "—")}</td>
+              <td>${esc(p.variant || "—")}</td>
+              <td>${esc(p.color || "—")}</td>
               <td><span class="badge">${esc(categoryName(p.category))}</span></td>
               <td><span class="badge ${low ? "low" : "ok"}">${p.stock}</span></td>
               <td>${moneyJpy(p.costPriceJpy)}</td>
               <td>${money(p.costPrice)}</td>
               <td>${Number(p.weight || 0)} kg</td>
               <td>${money(p.shippingFee || 0)}</td>
+              <td>${money(p.packagingFee || 0)}</td>
               <td>${money(p.price)}</td>
               <td class="row-actions">
                 <button class="btn secondary" data-edit="${p.id}">Sửa</button>
@@ -281,12 +309,14 @@ function productForm(id) {
     brand: "",
     category: state.categories[0].id,
     variant: "",
+    color: "",
     stock: 0,
     minStock: 3,
     costPrice: 0,
     costPriceJpy: 0,
     weight: 0,
     shippingFee: 0,
+    packagingFee: 0,
     price: 0,
   };
   openModal(id ? "Sửa sản phẩm" : "Thêm sản phẩm", `
@@ -298,14 +328,16 @@ function productForm(id) {
         </select>
       </label>
       <label class="full">Tên sản phẩm<input name="name" required value="${esc(p.name || "")}" /></label>
-      <label>Thương hiệu<input name="brand" value="${esc(p.brand || "")}" /></label>
+      <label>Brand<input name="brand" value="${esc(p.brand || "")}" /></label>
       <label>Size / dung tích<input name="variant" value="${esc(p.variant || "")}" placeholder="M / 170ml" /></label>
+      <label>Màu sắc<input name="color" value="${esc(p.color || "")}" placeholder="Trắng / Đen" /></label>
       <label>Tồn kho<input name="stock" type="number" min="0" value="${p.stock || 0}" /></label>
       <label>Ngưỡng cảnh báo<input name="minStock" type="number" min="0" value="${p.minStock || 0}" /></label>
       <label>Giá gốc VNĐ<input name="costPrice" type="number" min="0" value="${p.costPrice || 0}" /></label>
       <label>Giá gốc JPY<input name="costPriceJpy" type="number" min="0" value="${p.costPriceJpy || 0}" /></label>
       <label>Trọng lượng (kg)<input name="weight" type="number" min="0" step="0.1" value="${p.weight || 0}" /></label>
       <label>Phí vận chuyển (đ)<input name="shippingFee" type="number" min="0" value="${p.shippingFee || 0}" /></label>
+      <label>Phí bao bì (đ)<input name="packagingFee" type="number" min="0" value="${p.packagingFee || 0}" /></label>
       <label>Giá bán (đ)<input name="price" type="number" min="0" value="${p.price || 0}" /></label>
       <div class="form-actions full">
         <button type="button" class="btn secondary" id="cancel-modal">Hủy</button>
@@ -324,6 +356,7 @@ function productForm(id) {
     data.costPriceJpy = Number(data.costPriceJpy);
     data.weight = Number(data.weight);
     data.shippingFee = Number(data.shippingFee);
+    data.packagingFee = Number(data.packagingFee);
     data.price = Number(data.price);
     if (id) {
       Object.assign(productById(id), data);
