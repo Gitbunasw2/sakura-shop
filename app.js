@@ -925,37 +925,42 @@ function productsForOrderSearch(query) {
   });
 }
 
-function productOptions(selectedId, query = "") {
-  const options = productsForOrderSearch(query).map((product) => {
-    const details = [product.variant, product.color].filter(Boolean).map(esc).join(" / ");
-    return `<option value="${esc(product.id)}" ${product.id === selectedId ? "selected" : ""}>${esc(product.sku)} — ${esc(product.name)}${details ? ` (${details})` : ""} · ${money(product.price)} · tồn ${product.stock}</option>`;
-  }).join("");
-  return `<option value="">Chọn sản phẩm...</option>${options}`;
+function productOptionLabel(product) {
+  const details = [product.variant, product.color].filter(Boolean).join(" / ");
+  return `${product.sku} — ${product.name}${details ? ` (${details})` : ""} · ${money(product.price)} · tồn ${product.stock}`;
+}
+
+function renderProductSuggestions(datalist, query = "") {
+  datalist.innerHTML = productsForOrderSearch(query)
+    .map((product) => `<option value="${esc(productOptionLabel(product))}"></option>`)
+    .join("");
 }
 
 function addLine(productId, quantity = 1) {
   const wrap = document.getElementById("lines");
   const row = document.createElement("div");
+  const selectedProduct = productById(productId);
+  const datalistId = uid("product-suggestions-");
   row.className = "line";
   row.innerHTML = `
     <div class="product-picker">
-      <input class="product-search" type="search" placeholder="Tìm SKU, tên, size, màu..." />
-      <select name="pid">${productOptions(productId)}</select>
+      <input class="product-search" type="search" list="${datalistId}" autocomplete="off" placeholder="Nhập SKU, tên, size hoặc màu để chọn..." value="${selectedProduct ? esc(productOptionLabel(selectedProduct)) : ""}" />
+      <datalist id="${datalistId}"></datalist>
+      <input type="hidden" name="pid" value="${esc(selectedProduct?.id || "")}" />
     </div>
     <input name="qty" type="number" min="1" step="1" value="${quantity}" />
     <button type="button" class="btn danger rm">X</button>
   `;
   const searchInput = row.querySelector(".product-search");
-  const productSelect = row.querySelector("[name=pid]");
+  const productIdInput = row.querySelector("[name=pid]");
+  const datalist = row.querySelector("datalist");
+  renderProductSuggestions(datalist);
   searchInput.oninput = () => {
-    const selectedId = productSelect.value;
-    productSelect.innerHTML = productOptions(selectedId, searchInput.value);
-    if (!productsForOrderSearch(searchInput.value).some((product) => product.id === selectedId)) {
-      productSelect.value = "";
-    }
+    const selected = state.products.find((product) => productOptionLabel(product) === searchInput.value);
+    productIdInput.value = selected?.id || "";
+    renderProductSuggestions(datalist, selected ? "" : searchInput.value);
     updateOrderPaymentSummary();
   };
-  productSelect.onchange = updateOrderPaymentSummary;
   row.querySelector("[name=qty]").oninput = updateOrderPaymentSummary;
   row.querySelector(".rm").onclick = () => {
     row.remove();
