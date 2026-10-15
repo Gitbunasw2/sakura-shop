@@ -168,6 +168,30 @@ function orderAmountDue(order) {
   return Math.max(0, Number(order.total || 0) - paidAmount);
 }
 
+function dateInputValue(timestamp) {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatOrderDate(timestamp) {
+  return new Intl.DateTimeFormat("vi-VN").format(new Date(timestamp));
+}
+
+async function fetchInternetDate() {
+  const response = await fetch("https://worldtimeapi.org/api/timezone/Asia/Ho_Chi_Minh", {
+    cache: "no-store",
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!response.ok) throw new Error("Không lấy được ngày từ internet");
+  const data = await response.json();
+  const date = String(data.datetime || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Ngày internet không hợp lệ");
+  return date;
+}
+
 function toast(msg) {
   const el = document.getElementById("toast");
   if (!el) return;
@@ -553,12 +577,13 @@ function renderOrders() {
     ${
       rows.length
         ? `<table><thead><tr>
-          <th>Mã</th><th>Khách</th><th>Món</th><th>Tổng</th><th>Khách cần thanh toán</th><th>Lợi nhuận</th><th>Trạng thái</th><th></th>
+          <th>Mã</th><th>Ngày tạo</th><th>Khách</th><th>Món</th><th>Tổng</th><th>Khách cần thanh toán</th><th>Lợi nhuận</th><th>Trạng thái</th><th></th>
         </tr></thead><tbody>
         ${rows.map((o) => {
           const count = o.items.reduce((s, i) => s + i.qty, 0);
           return `<tr>
             <td>${o.code}</td>
+            <td>${formatOrderDate(o.createdAt)}</td>
             <td><strong>${o.customerName}</strong><br><span style="color:var(--muted)">${o.customerPhone || ""}</span></td>
             <td>${count} sp</td>
             <td>${money(o.total)}</td>
@@ -595,6 +620,8 @@ function orderForm(orderId) {
       <div class="form-grid">
         <label>Tên khách<input name="customerName" required placeholder="Nguyễn A" value="${esc(existingOrder?.customerName || "")}" /></label>
         <label>Số điện thoại<input name="customerPhone" placeholder="09..." value="${esc(existingOrder?.customerPhone || "")}" /></label>
+        <label>Ngày tạo đơn<input name="createdDate" id="order-created-date" type="date" required value="${dateInputValue(existingOrder?.createdAt || Date.now())}" /></label>
+        <small id="order-date-help" class="full">${existingOrder ? "Có thể chỉnh sửa ngày tạo." : "Đang lấy ngày hiện tại từ internet... Nếu không kết nối được, bạn có thể nhập ngày thủ công."}</small>
         <label class="full">Địa chỉ khách hàng<textarea name="customerAddress" rows="2" placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành phố">${esc(existingOrder?.customerAddress || "")}</textarea></label>
         <label>Phí vận chuyển (đ)<input name="shippingFee" id="order-shipping-fee" type="number" min="0" step="1" placeholder="0" value="${existingOrder?.shippingFee || ""}" /></label>
         <label>Trạng thái
@@ -622,6 +649,25 @@ function orderForm(orderId) {
   `);
   document.getElementById("cancel-modal").onclick = closeModal;
   document.getElementById("add-line").onclick = () => addLine();
+  const createdDateInput = document.getElementById("order-created-date");
+  const dateHelp = document.getElementById("order-date-help");
+  let dateEdited = false;
+  createdDateInput.oninput = () => {
+    dateEdited = true;
+    dateHelp.textContent = "Ngày tạo đã được nhập thủ công.";
+  };
+  if (!existingOrder) {
+    fetchInternetDate().then((date) => {
+      if (!dateEdited && document.getElementById("order-created-date") === createdDateInput) {
+        createdDateInput.value = date;
+        dateHelp.textContent = "Đã lấy ngày hiện tại từ internet (múi giờ Việt Nam).";
+      }
+    }).catch(() => {
+      if (document.getElementById("order-created-date") === createdDateInput) {
+        dateHelp.textContent = "Không lấy được ngày từ internet. Hãy nhập ngày tạo thủ công.";
+      }
+    });
+  }
   const statusSelect = document.getElementById("new-order-status");
   const depositField = document.getElementById("new-deposit-field");
   const depositInput = document.getElementById("new-deposit-amount");
@@ -731,6 +777,11 @@ function submitOrder(e, orderId) {
     return toast("Phí vận chuyển không hợp lệ");
   }
   const total = items.reduce((sum, item) => sum + item.qty * item.price, 0) + shippingFee;
+  const [year, month, day] = String(fd.get("createdDate") || "").split("-").map(Number);
+  const createdDate = new Date(year, month - 1, day, 12);
+  if (!year || !month || !day || createdDate.getFullYear() !== year || createdDate.getMonth() !== month - 1 || createdDate.getDate() !== day) {
+    return toast("Ngày tạo đơn không hợp lệ");
+  }
   let depositAmount = existingOrder?.depositAmount || 0;
   if (status === "deposited") {
     depositAmount = Number(fd.get("depositAmount"));
@@ -767,7 +818,7 @@ function submitOrder(e, orderId) {
     status,
     depositAmount,
     total,
-    createdAt: existingOrder?.createdAt || Date.now(),
+    createdAt: createdDate.getTime(),
   };
   if (existingOrder) {
     Object.assign(existingOrder, order);
@@ -784,6 +835,7 @@ function orderDetail(id) {
   const o = state.orders.find((x) => x.id === id);
   if (!o) return;
   openModal("Đơn " + o.code, `
+    <p>Ngày tạo: ${formatOrderDate(o.createdAt)}</p>
     <p><strong>${o.customerName}</strong> · ${o.customerPhone || "—"}</p>
     <p>Địa chỉ: ${esc(o.customerAddress || "—")}</p>
     <table><thead><tr><th>SP</th><th>SL</th><th>Giá</th></tr></thead>
