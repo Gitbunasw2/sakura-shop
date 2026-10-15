@@ -546,6 +546,12 @@ function productForm(id) {
     e.preventDefault();
     const fd = new FormData(e.target);
     const data = Object.fromEntries(fd.entries());
+    data.sku = data.sku.trim();
+    const skuKey = data.sku.toLocaleUpperCase("vi-VN");
+    const duplicateSku = state.products.some((product) =>
+      product.id !== id && String(product.sku || "").trim().toLocaleUpperCase("vi-VN") === skuKey
+    );
+    if (duplicateSku) return toast("SKU này đã được sử dụng");
     data.stock = Number(data.stock);
     data.minStock = Number(data.minStock);
     data.costPrice = Number(data.costPrice);
