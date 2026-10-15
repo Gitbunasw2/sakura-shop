@@ -381,31 +381,33 @@ function renderDashboard() {
       <div class="card"><div class="label">Doanh thu (${filteredPeriodLabel})</div><div class="value" style="font-size:20px">${money(revenue)}</div></div>
       <div class="card"><div class="label">${profitLabel}</div><div class="value" style="font-size:20px">${money(profit)}</div></div>
     </div>
-    <div class="card list-block">
-      <h3>Sắp hết hàng</h3>
-      ${
-        low.length
-          ? `<table><thead><tr><th>SKU</th><th>Sản phẩm</th><th>Tồn</th><th>Ngưỡng</th></tr></thead><tbody>
-          ${low
-            .map(
-              (p) =>
-                `<tr><td>${p.sku}</td><td>${p.name}</td><td><span class="badge low">${p.stock}</span></td><td>${p.minStock}</td></tr>`
-            )
-            .join("")}
-        </tbody></table>`
-          : `<div class="empty">Chưa có sản phẩm dưới ngưỡng.</div>`
-      }
-    </div>
-    <div class="card list-block">
-      <h3>Góp vốn theo người (${periodName})</h3>
-      ${contributorTotals.length
-        ? `<div class="table-wrap"><table><thead><tr><th>Người góp</th><th>Tổng tiền góp</th><th>Tỷ lệ</th></tr></thead><tbody>
-          ${contributorTotals.map((item) => {
-            const share = totalContributions ? (item.amount / totalContributions) * 100 : 0;
-            return `<tr><td><strong>${esc(item.name)}</strong></td><td>${money(item.amount)}</td><td>${share.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%</td></tr>`;
-          }).join("")}
-        </tbody></table></div>`
-        : `<div class="empty">Chưa có dữ liệu góp vốn.</div>`}
+    <div class="dashboard-lists">
+      <div class="card list-block">
+        <h3>Góp vốn theo người (${periodName})</h3>
+        ${contributorTotals.length
+          ? `<div class="table-wrap"><table><thead><tr><th>Người góp</th><th>Tổng tiền góp</th><th>Tỷ lệ</th></tr></thead><tbody>
+            ${contributorTotals.map((item) => {
+              const share = totalContributions ? (item.amount / totalContributions) * 100 : 0;
+              return `<tr><td><strong>${esc(item.name)}</strong></td><td>${money(item.amount)}</td><td>${share.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%</td></tr>`;
+            }).join("")}
+          </tbody></table></div>`
+          : `<div class="empty">Chưa có dữ liệu góp vốn.</div>`}
+      </div>
+      <div class="card list-block">
+        <h3>Sắp hết hàng</h3>
+        ${
+          low.length
+            ? `<table><thead><tr><th>SKU</th><th>Sản phẩm</th><th>Tồn</th><th>Ngưỡng</th></tr></thead><tbody>
+            ${low
+              .map(
+                (p) =>
+                  `<tr><td>${p.sku}</td><td>${p.name}</td><td><span class="badge low">${p.stock}</span></td><td>${p.minStock}</td></tr>`
+              )
+              .join("")}
+          </tbody></table>`
+            : `<div class="empty">Chưa có sản phẩm dưới ngưỡng.</div>`
+        }
+      </div>
     </div>
   `;
   document.getElementById("profit-period").onchange = renderDashboard;

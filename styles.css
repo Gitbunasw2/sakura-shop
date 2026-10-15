@@ -371,6 +371,11 @@ th {
   gap: 10px;
 }
 
+.dashboard-lists {
+  display: grid;
+  gap: 20px;
+}
+
 @media (max-width: 960px) {
   body {
     grid-template-columns: 1fr;
