@@ -98,6 +98,12 @@ function normalizeState(parsed) {
       if (item.packagingFee === undefined) item.packagingFee = Number(product?.packagingFee) || 0;
     });
   });
+  contributions.forEach((contribution) => {
+    if (contribution.amountJpy === undefined) contribution.amountJpy = 0;
+    if (contribution.amountVnd === undefined) {
+      contribution.amountVnd = Number(contribution.amount || 0);
+    }
+  });
   return { products, orders, categories, contributions };
 }
 
@@ -701,19 +707,22 @@ function renderOrders() {
 
 function renderContributions() {
   const contributions = [...state.contributions].sort((a, b) => b.date.localeCompare(a.date));
-  const total = contributions.reduce((sum, contribution) => sum + Number(contribution.amount || 0), 0);
+  const totalJpy = contributions.reduce((sum, contribution) => sum + Number(contribution.amountJpy || 0), 0);
+  const totalVnd = contributions.reduce((sum, contribution) => sum + Number(contribution.amountVnd || 0), 0);
 
   document.getElementById("view-contributions").innerHTML = `
     <div class="cards">
-      <div class="card"><div class="label">Tổng vốn góp</div><div class="value" style="font-size:20px">${money(total)}</div></div>
+      <div class="card"><div class="label">Tổng góp tiền Yên</div><div class="value" style="font-size:20px">${moneyJpy(totalJpy)}</div></div>
+      <div class="card"><div class="label">Tổng góp tiền Việt</div><div class="value" style="font-size:20px">${money(totalVnd)}</div></div>
       <div class="card"><div class="label">Số lần góp</div><div class="value">${contributions.length}</div></div>
     </div>
     ${contributions.length
-      ? `<div class="table-wrap"><table><thead><tr><th>Ngày góp vốn</th><th>Người góp</th><th>Số tiền</th><th></th></tr></thead><tbody>
+      ? `<div class="table-wrap"><table><thead><tr><th>Ngày góp vốn</th><th>Người góp</th><th>Tiền Yên</th><th>Tiền Việt</th><th></th></tr></thead><tbody>
         ${contributions.map((contribution) => `<tr>
           <td>${formatOrderDate(new Date(`${contribution.date}T12:00:00`).getTime())}</td>
           <td><strong>${esc(contribution.contributor)}</strong></td>
-          <td>${money(contribution.amount)}</td>
+          <td>${moneyJpy(contribution.amountJpy)}</td>
+          <td>${money(contribution.amountVnd)}</td>
           <td class="row-actions">
             <button class="btn secondary" data-contribution-edit="${esc(contribution.id)}">Sửa</button>
             <button class="btn danger" data-contribution-delete="${esc(contribution.id)}">Xóa</button>
@@ -739,7 +748,8 @@ function contributionForm(id) {
     <form id="contribution-form" class="form-grid">
       <label>Ngày góp vốn<input name="date" type="date" required value="${contribution?.date || dateInputValue(Date.now())}" /></label>
       <label>Người góp<input name="contributor" required maxlength="100" value="${esc(contribution?.contributor || "")}" placeholder="Tên người góp vốn" /></label>
-      <label class="full">Số tiền (đ)<input name="amount" type="number" min="1" step="1" required value="${contribution?.amount || ""}" /></label>
+      <label>Tiền Yên (JPY)<input name="amountJpy" type="number" min="0" step="1" value="${contribution?.amountJpy || 0}" /></label>
+      <label>Tiền Việt (đ)<input name="amountVnd" type="number" min="0" step="1" value="${contribution?.amountVnd || 0}" /></label>
       <div class="form-actions full">
         <button type="button" class="btn secondary" id="cancel-modal">Hủy</button>
         <button class="btn" type="submit">${id ? "Lưu thay đổi" : "Lưu khoản góp"}</button>
@@ -751,14 +761,18 @@ function contributionForm(id) {
   document.getElementById("contribution-form").onsubmit = (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.target).entries());
-    const amount = Number(data.amount);
-    if (!Number.isFinite(amount) || amount <= 0) return toast("Số tiền góp phải lớn hơn 0");
+    const amountJpy = Number(data.amountJpy) || 0;
+    const amountVnd = Number(data.amountVnd) || 0;
+    if (!Number.isFinite(amountJpy) || !Number.isFinite(amountVnd) || amountJpy < 0 || amountVnd < 0 || amountJpy + amountVnd <= 0) {
+      return toast("Nhập ít nhất một khoản góp lớn hơn 0");
+    }
 
     const record = {
       id: contribution?.id || uid("capital"),
       date: data.date,
       contributor: data.contributor.trim(),
-      amount,
+      amountJpy,
+      amountVnd,
     };
     if (contribution) Object.assign(contribution, record);
     else state.contributions.unshift(record);
