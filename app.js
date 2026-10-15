@@ -561,6 +561,7 @@ function orderForm() {
       <div class="form-grid">
         <label>Tên khách<input name="customerName" required placeholder="Nguyễn A" /></label>
         <label>Số điện thoại<input name="customerPhone" placeholder="09..." /></label>
+        <label>Phí vận chuyển (đ)<input name="shippingFee" id="order-shipping-fee" type="number" min="0" step="1" placeholder="0" /></label>
         <label>Trạng thái
           <select name="status" id="new-order-status">
             ${["new", "confirmed", "pending_payment", "deposited", "paid"].map((status) => `<option value="${status}">${STATUSES[status]}</option>`).join("")}
@@ -574,6 +575,10 @@ function orderForm() {
       <h3 style="margin:16px 0 8px">Sản phẩm</h3>
       <div id="lines" class="order-lines"></div>
       <button type="button" class="btn secondary" id="add-line">Thêm dòng</button>
+      <div class="order-payment-summary">
+        <p>Tổng đơn: <strong id="new-order-total">0 đ</strong></p>
+        <p>Khách cần thanh toán: <strong id="new-order-amount-due">0 đ</strong></p>
+      </div>
       <div class="form-actions">
         <button type="button" class="btn secondary" id="cancel-modal">Hủy</button>
         <button class="btn" type="submit">Tạo đơn & trừ kho</button>
@@ -589,7 +594,10 @@ function orderForm() {
     const isDeposited = statusSelect.value === "deposited";
     depositField.classList.toggle("hidden", !isDeposited);
     depositInput.required = isDeposited;
+    updateOrderPaymentSummary();
   };
+  document.getElementById("order-shipping-fee").oninput = updateOrderPaymentSummary;
+  depositInput.oninput = updateOrderPaymentSummary;
   addLine();
   document.getElementById("order-form").onsubmit = submitOrder;
 }
@@ -607,8 +615,32 @@ function addLine() {
     <input name="qty" type="number" min="1" value="1" />
     <button type="button" class="btn danger rm">X</button>
   `;
-  row.querySelector(".rm").onclick = () => row.remove();
+  row.querySelector("select").onchange = updateOrderPaymentSummary;
+  row.querySelector("[name=qty]").oninput = updateOrderPaymentSummary;
+  row.querySelector(".rm").onclick = () => {
+    row.remove();
+    updateOrderPaymentSummary();
+  };
   wrap.appendChild(row);
+  updateOrderPaymentSummary();
+}
+
+function updateOrderPaymentSummary() {
+  const lines = [...document.querySelectorAll("#lines .line")];
+  const productTotal = lines.reduce((sum, line) => {
+    const product = productById(line.querySelector("[name=pid]").value);
+    const quantity = Math.max(0, Number(line.querySelector("[name=qty]").value) || 0);
+    return sum + (product ? product.price * quantity : 0);
+  }, 0);
+  const shippingFee = Math.max(0, Number(document.getElementById("order-shipping-fee")?.value) || 0);
+  const total = productTotal + shippingFee;
+  const status = document.getElementById("new-order-status")?.value;
+  const depositAmount = Number(document.getElementById("new-deposit-amount")?.value) || 0;
+  const paidAmount = status === "paid" ? total : status === "deposited" ? depositAmount : 0;
+  const totalElement = document.getElementById("new-order-total");
+  const dueElement = document.getElementById("new-order-amount-due");
+  if (totalElement) totalElement.textContent = money(total);
+  if (dueElement) dueElement.textContent = money(Math.max(0, total - paidAmount));
 }
 
 function submitOrder(e) {
@@ -626,7 +658,11 @@ function submitOrder(e) {
     items.push({ productId: p.id, name: p.name, sku: p.sku, qty, price: p.price });
   }
 
-  const total = items.reduce((sum, item) => sum + item.qty * item.price, 0);
+  const shippingFee = Number(fd.get("shippingFee")) || 0;
+  if (!Number.isFinite(shippingFee) || shippingFee < 0) {
+    return toast("Phí vận chuyển không hợp lệ");
+  }
+  const total = items.reduce((sum, item) => sum + item.qty * item.price, 0) + shippingFee;
   const status = fd.get("status");
   let depositAmount = 0;
   if (status === "deposited") {
@@ -647,6 +683,7 @@ function submitOrder(e) {
     customerPhone: fd.get("customerPhone"),
     note: fd.get("note"),
     items,
+    shippingFee,
     status,
     depositAmount,
     total,
@@ -666,6 +703,7 @@ function orderDetail(id) {
     <p><strong>${o.customerName}</strong> · ${o.customerPhone || "—"}</p>
     <table><thead><tr><th>SP</th><th>SL</th><th>Giá</th></tr></thead>
     <tbody>${o.items.map((i) => `<tr><td>${i.sku}${i.name}</td><td>${i.qty}</td><td>${money(i.qty * i.price)}</td></tr>`).join("")}</tbody></table>
+    <p>Phí vận chuyển: ${money(o.shippingFee || 0)}</p>
     <p style="margin-top:12px"><strong>Tổng: ${money(o.total)}</strong></p>
     <p>Đã thanh toán: <strong id="order-paid-amount">${money(o.status === "paid" ? o.total : o.depositAmount || 0)}</strong></p>
     <p>Còn phải trả: <strong id="order-remaining-amount">${money(Math.max(0, o.total - (o.status === "paid" ? o.total : o.depositAmount || 0)))}</strong></p>
