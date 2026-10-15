@@ -930,22 +930,33 @@ function productOptionLabel(product) {
   return `${product.sku} — ${product.name}${details ? ` (${details})` : ""} · ${money(product.price)} · tồn ${product.stock}`;
 }
 
-function renderProductSuggestions(datalist, query = "") {
-  datalist.innerHTML = productsForOrderSearch(query)
-    .map((product) => `<option value="${esc(productOptionLabel(product))}"></option>`)
-    .join("");
+function renderProductSuggestions(list, query, onSelect) {
+  const matches = productsForOrderSearch(query);
+  list.innerHTML = matches.length
+    ? matches.map((product) => {
+      const details = [product.variant, product.color].filter(Boolean).map(esc).join(" · ");
+      return `<button type="button" class="product-suggestion" data-product-id="${esc(product.id)}">
+        <span>${esc(product.sku)} — ${esc(product.name)}</span>
+        <small>${details ? `${details} · ` : ""}${money(product.price)} · Tồn ${product.stock}</small>
+      </button>`;
+    }).join("")
+    : `<div class="product-suggestion-empty">Không tìm thấy sản phẩm</div>`;
+  list.classList.toggle("hidden", !query.trim());
+  list.querySelectorAll("[data-product-id]").forEach((button) => {
+    button.onmousedown = (event) => event.preventDefault();
+    button.onclick = () => onSelect(productById(button.dataset.productId));
+  });
 }
 
 function addLine(productId, quantity = 1) {
   const wrap = document.getElementById("lines");
   const row = document.createElement("div");
   const selectedProduct = productById(productId);
-  const datalistId = uid("product-suggestions-");
   row.className = "line";
   row.innerHTML = `
     <div class="product-picker">
-      <input class="product-search" type="search" list="${datalistId}" autocomplete="off" placeholder="Nhập SKU, tên, size hoặc màu để chọn..." value="${selectedProduct ? esc(productOptionLabel(selectedProduct)) : ""}" />
-      <datalist id="${datalistId}"></datalist>
+      <input class="product-search" type="search" autocomplete="off" aria-autocomplete="list" aria-expanded="false" placeholder="Nhập SKU, tên, size hoặc màu để chọn..." value="${selectedProduct ? esc(productOptionLabel(selectedProduct)) : ""}" />
+      <div class="product-suggestions hidden" role="listbox"></div>
       <input type="hidden" name="pid" value="${esc(selectedProduct?.id || "")}" />
     </div>
     <input name="qty" type="number" min="1" step="1" value="${quantity}" />
@@ -953,13 +964,45 @@ function addLine(productId, quantity = 1) {
   `;
   const searchInput = row.querySelector(".product-search");
   const productIdInput = row.querySelector("[name=pid]");
-  const datalist = row.querySelector("datalist");
-  renderProductSuggestions(datalist);
+  const suggestions = row.querySelector(".product-suggestions");
+  const selectProduct = (product) => {
+    searchInput.value = productOptionLabel(product);
+    productIdInput.value = product.id;
+    suggestions.classList.add("hidden");
+    searchInput.setAttribute("aria-expanded", "false");
+    updateOrderPaymentSummary();
+  };
   searchInput.oninput = () => {
     const selected = state.products.find((product) => productOptionLabel(product) === searchInput.value);
     productIdInput.value = selected?.id || "";
-    renderProductSuggestions(datalist, selected ? "" : searchInput.value);
+    renderProductSuggestions(suggestions, selected ? "" : searchInput.value, selectProduct);
+    searchInput.setAttribute("aria-expanded", String(!selected && Boolean(searchInput.value.trim())));
     updateOrderPaymentSummary();
+  };
+  searchInput.onfocus = () => {
+    if (searchInput.value.trim() && !productIdInput.value) {
+      renderProductSuggestions(suggestions, searchInput.value, selectProduct);
+      searchInput.setAttribute("aria-expanded", "true");
+    }
+  };
+  searchInput.onblur = () => {
+    setTimeout(() => {
+      suggestions.classList.add("hidden");
+      searchInput.setAttribute("aria-expanded", "false");
+    }, 120);
+  };
+  searchInput.onkeydown = (event) => {
+    if (event.key === "Enter" && !suggestions.classList.contains("hidden")) {
+      const firstSuggestion = suggestions.querySelector("[data-product-id]");
+      if (firstSuggestion) {
+        event.preventDefault();
+        firstSuggestion.click();
+      }
+    }
+    if (event.key === "Escape") {
+      suggestions.classList.add("hidden");
+      searchInput.setAttribute("aria-expanded", "false");
+    }
   };
   row.querySelector("[name=qty]").oninput = updateOrderPaymentSummary;
   row.querySelector(".rm").onclick = () => {
