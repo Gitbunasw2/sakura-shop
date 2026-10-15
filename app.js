@@ -11,7 +11,7 @@ const STATUSES = {
   cancelled: "Đã hủy",
 };
 
-let state = { products: [], orders: [], categories: [], contributions: [] };
+let state = { products: [], orders: [], categories: [], contributions: [], invoices: [] };
 let currentView = "dashboard";
 let inventorySearchQuery = "";
 
@@ -46,7 +46,8 @@ async function loadData() {
       products: storeData.products || [],
       categories: storeData.categories || [],
       orders: orderData.orders || [],
-      contributions: orderData.contributions || []
+      contributions: orderData.contributions || [],
+      invoices: orderData.invoices || []
     });
 
     save();
@@ -65,6 +66,7 @@ function normalizeState(parsed) {
   const products = parsed.products || [];
   const orders = parsed.orders || [];
   const contributions = Array.isArray(parsed.contributions) ? parsed.contributions : [];
+  const invoices = Array.isArray(parsed.invoices) ? parsed.invoices : [];
   let categories = Array.isArray(parsed.categories) ? parsed.categories.filter((c) => c && c.id && c.name) : [];
   const known = new Set(categories.map((c) => c.id));
   
@@ -105,7 +107,7 @@ function normalizeState(parsed) {
       contribution.amountVnd = Number(contribution.amount || 0);
     }
   });
-  return { products, orders, categories, contributions };
+  return { products, orders, categories, contributions, invoices };
 }
 
 function save() {
@@ -240,8 +242,9 @@ function setView(view) {
   document.getElementById("view-dashboard").classList.toggle("hidden", view !== "dashboard");
   document.getElementById("view-inventory").classList.toggle("hidden", view !== "inventory");
   document.getElementById("view-orders").classList.toggle("hidden", view !== "orders");
+  document.getElementById("view-invoices").classList.toggle("hidden", view !== "invoices");
   document.getElementById("view-contributions").classList.toggle("hidden", view !== "contributions");
-  const titles = { dashboard: "Tổng quan", inventory: "Kho hàng", orders: "Đơn hàng", contributions: "Góp vốn" };
+  const titles = { dashboard: "Tổng quan", inventory: "Kho hàng", orders: "Đơn hàng", invoices: "Hóa đơn nhập/xuất", contributions: "Góp vốn" };
   document.getElementById("page-title").textContent = titles[view];
   render();
 }
@@ -249,7 +252,7 @@ function setView(view) {
 function openModal(title, html) {
   document.getElementById("modal-title").textContent = title;
   document.getElementById("modal-body").innerHTML = html;
-  document.querySelector("#modal .modal-card").classList.toggle("wide", title.startsWith("Tạo đơn hàng") || title.startsWith("Sửa đơn "));
+  document.querySelector("#modal .modal-card").classList.toggle("wide", title.startsWith("Tạo đơn hàng") || title.startsWith("Sửa đơn ") || title.startsWith("Tạo hóa đơn"));
   document.getElementById("modal").classList.remove("hidden");
 }
 
@@ -277,6 +280,10 @@ function render() {
     actions.innerHTML = `<button class="btn sakura" id="add-order">Tạo đơn hàng</button>`;
     document.getElementById("add-order").onclick = () => orderForm();
     renderOrders();
+  } else if (currentView === "invoices") {
+    actions.innerHTML = `<button class="btn sakura" id="add-invoice">Tạo hóa đơn</button>`;
+    document.getElementById("add-invoice").onclick = () => invoiceForm();
+    renderInvoices();
   } else if (currentView === "contributions") {
     actions.innerHTML = `<button class="btn sakura" id="add-contribution">Thêm khoản góp vốn</button>`;
     document.getElementById("add-contribution").onclick = () => contributionForm();
@@ -747,6 +754,188 @@ function renderOrders() {
   document.querySelectorAll("[data-view-order]").forEach((b) => {
     b.onclick = () => orderDetail(b.dataset.viewOrder);
   });
+}
+
+function renderInvoices() {
+  const invoices = [...state.invoices].sort((a, b) => b.date.localeCompare(a.date));
+  document.getElementById("view-invoices").innerHTML = invoices.length
+    ? `<div class="table-wrap"><table><thead><tr>
+        <th>Ngày</th><th>Mã hóa đơn</th><th>Loại</th><th>Sản phẩm</th><th>Phí vận chuyển</th><th>Chi phí phát sinh</th><th>Giá trị hóa đơn</th><th></th>
+      </tr></thead><tbody>
+      ${invoices.map((invoice) => {
+        const productSummary = invoice.items.map((item) => `${item.name} × ${item.qty}`).join(", ");
+        return `<tr>
+          <td>${formatOrderDate(new Date(`${invoice.date}T12:00:00`).getTime())}</td>
+          <td><strong>${esc(invoice.code)}</strong></td>
+          <td>${invoice.type === "import" ? "Nhập" : "Xuất"}</td>
+          <td>${esc(productSummary)}</td>
+          <td>${money(invoice.shippingFee)}</td>
+          <td>${money(invoice.otherExpense)}</td>
+          <td><strong>${money(invoice.invoiceValue)}</strong></td>
+          <td><button class="btn secondary" data-invoice-view="${esc(invoice.id)}">Chi tiết</button></td>
+        </tr>`;
+      }).join("")}
+      </tbody></table></div>`
+    : `<div class="card empty">Chưa có hóa đơn nhập/xuất.</div>`;
+
+  document.querySelectorAll("[data-invoice-view]").forEach((button) => {
+    button.onclick = () => invoiceDetails(button.dataset.invoiceView);
+  });
+}
+
+function invoiceProductOptions() {
+  return state.products.map((product) => {
+    const details = [product.variant, product.color].filter(Boolean).map(esc).join(" / ");
+    return `<option value="${esc(product.id)}">${esc(product.sku)} — ${esc(product.name)}${details ? ` (${details})` : ""} · tồn ${product.stock} · ${money(product.price)}</option>`;
+  }).join("");
+}
+
+function addInvoiceLine() {
+  const container = document.getElementById("invoice-lines");
+  const row = document.createElement("div");
+  row.className = "line invoice-line";
+  row.innerHTML = `
+    <select name="productId" required>
+      <option value="">Chọn hàng hóa...</option>
+      ${invoiceProductOptions()}
+    </select>
+    <input name="quantity" type="number" min="1" step="1" value="1" required />
+    <button type="button" class="btn danger remove-invoice-line" aria-label="Xóa sản phẩm">X</button>
+  `;
+  row.querySelector(".remove-invoice-line").onclick = () => row.remove();
+  container.appendChild(row);
+}
+
+function invoiceForm() {
+  if (!state.products.length) {
+    toast("Hãy thêm sản phẩm vào kho trước");
+    return;
+  }
+
+  openModal("Tạo hóa đơn nhập/xuất", `
+    <form id="invoice-form" class="stack">
+      <div class="form-grid">
+        <label>Loại hóa đơn
+          <select name="type" required>
+            <option value="import">Nhập hàng</option>
+            <option value="export">Xuất hàng</option>
+          </select>
+        </label>
+        <label>Ngày hóa đơn<input name="date" type="date" required value="${dateInputValue(Date.now())}" /></label>
+        <label class="full">Mã hóa đơn<input name="code" maxlength="80" placeholder="Để trống để tự tạo mã" /></label>
+      </div>
+      <h3>Sản phẩm</h3>
+      <div id="invoice-lines" class="order-lines"></div>
+      <button type="button" class="btn secondary" id="add-invoice-line">Thêm sản phẩm</button>
+      <div class="form-grid">
+        <label>Chi phí vận chuyển (đ)<input name="shippingFee" type="number" min="0" step="1" value="0" required /></label>
+        <label>Chi phí phát sinh (đ)<input name="otherExpense" type="number" min="0" step="1" value="0" required /></label>
+        <label class="full">Giá trị hóa đơn (đ)<input name="invoiceValue" type="number" min="0" step="1" required /></label>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn secondary" id="cancel-modal">Hủy</button>
+        <button class="btn" type="submit">Lưu hóa đơn</button>
+      </div>
+    </form>
+  `);
+
+  document.getElementById("cancel-modal").onclick = closeModal;
+  document.getElementById("add-invoice-line").onclick = addInvoiceLine;
+  addInvoiceLine();
+  document.getElementById("invoice-form").onsubmit = submitInvoice;
+}
+
+function submitInvoice(event) {
+  event.preventDefault();
+  const formData = new FormData(event.currentTarget);
+  const date = String(formData.get("date") || "");
+  const invoiceDate = new Date(`${date}T12:00:00`);
+  if (!date || Number.isNaN(invoiceDate.getTime()) || dateInputValue(invoiceDate.getTime()) !== date) {
+    return toast("Ngày hóa đơn không hợp lệ");
+  }
+
+  const lines = [...document.querySelectorAll("#invoice-lines .invoice-line")];
+  const items = [];
+  const quantities = new Map();
+  for (const line of lines) {
+    const productId = line.querySelector("[name=productId]").value;
+    const quantity = Number(line.querySelector("[name=quantity]").value);
+    const product = productById(productId);
+    if (!product || !Number.isInteger(quantity) || quantity < 1) {
+      return toast("Chọn hàng hóa và nhập số lượng hợp lệ cho từng dòng");
+    }
+    quantities.set(productId, (quantities.get(productId) || 0) + quantity);
+    items.push({
+      productId,
+      sku: product.sku,
+      name: product.name,
+      variant: product.variant || "",
+      color: product.color || "",
+      quantity,
+    });
+  }
+  if (!items.length) return toast("Hãy thêm ít nhất một sản phẩm vào hóa đơn");
+
+  const type = formData.get("type");
+  const shippingFee = Number(formData.get("shippingFee"));
+  const otherExpense = Number(formData.get("otherExpense"));
+  const invoiceValue = Number(formData.get("invoiceValue"));
+  if ([shippingFee, otherExpense, invoiceValue].some((amount) => !Number.isFinite(amount) || amount < 0)) {
+    return toast("Chi phí và giá trị hóa đơn phải là số không âm");
+  }
+  if (type === "export") {
+    for (const [productId, quantity] of quantities) {
+      const product = productById(productId);
+      if (quantity > Number(product.stock || 0)) {
+        return toast(`Không đủ tồn kho cho sản phẩm ${product.sku}`);
+      }
+    }
+  }
+
+  const requestedCode = String(formData.get("code") || "").trim();
+  const sequence = state.invoices.filter((invoice) => invoice.date === date && invoice.type === type).length + 1;
+  const code = requestedCode || `${type === "import" ? "PN" : "PX"}-${date.replaceAll("-", "")}-${String(sequence).padStart(3, "0")}`;
+  if (state.invoices.some((invoice) => String(invoice.code || "").trim().toLocaleUpperCase("vi-VN") === code.toLocaleUpperCase("vi-VN"))) {
+    return toast("Mã hóa đơn đã tồn tại");
+  }
+
+  quantities.forEach((quantity, productId) => {
+    const product = productById(productId);
+    product.stock = Number(product.stock || 0) + (type === "import" ? quantity : -quantity);
+  });
+  state.invoices.unshift({
+    id: uid("invoice"),
+    code,
+    type,
+    date,
+    items,
+    shippingFee,
+    otherExpense,
+    invoiceValue,
+  });
+  save();
+  closeModal();
+  toast("Đã lưu hóa đơn " + code);
+  renderInvoices();
+}
+
+function invoiceDetails(id) {
+  const invoice = state.invoices.find((item) => item.id === id);
+  if (!invoice) return;
+  openModal("Hóa đơn " + invoice.code, `
+    <p>Loại hóa đơn: <strong>${invoice.type === "import" ? "Nhập hàng" : "Xuất hàng"}</strong></p>
+    <p>Ngày: ${formatOrderDate(new Date(`${invoice.date}T12:00:00`).getTime())}</p>
+    <table><thead><tr><th>SKU</th><th>Sản phẩm</th><th>Size / màu</th><th>Số lượng</th></tr></thead><tbody>
+      ${invoice.items.map((item) => `<tr>
+        <td>${esc(item.sku)}</td><td>${esc(item.name)}</td>
+        <td>${esc([item.variant, item.color].filter(Boolean).join(" / ") || "—")}</td>
+        <td>${item.quantity}</td>
+      </tr>`).join("")}
+    </tbody></table>
+    <p>Chi phí vận chuyển: ${money(invoice.shippingFee)}</p>
+    <p>Chi phí phát sinh: ${money(invoice.otherExpense)}</p>
+    <p><strong>Giá trị hóa đơn: ${money(invoice.invoiceValue)}</strong></p>
+  `);
 }
 
 function renderContributions() {
@@ -1275,7 +1464,8 @@ function exportStoreData() {
 function exportOrderData() {
   const orderData = {
     orders: state.orders,
-    contributions: state.contributions
+    contributions: state.contributions,
+    invoices: state.invoices
   };
   downloadJSON(orderData, "order_data.json");
 }
@@ -1335,7 +1525,8 @@ function openImportBackupModal() {
         products: storeData.products || [],
         categories: storeData.categories || [],
         orders: orderData.orders || [],
-        contributions: orderData.contributions || []
+        contributions: orderData.contributions || [],
+        invoices: orderData.invoices || []
       });
 
       save();
@@ -1385,6 +1576,7 @@ function importDualFiles(event) {
         if (loadedOrders) {
           if (loadedOrders.orders) state.orders = loadedOrders.orders;
           if (loadedOrders.contributions) state.contributions = loadedOrders.contributions;
+          if (loadedOrders.invoices) state.invoices = loadedOrders.invoices;
         }
 
         state = normalizeState(state);
