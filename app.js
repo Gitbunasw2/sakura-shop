@@ -274,7 +274,25 @@ function render() {
 
 function renderDashboard() {
   const period = document.getElementById("profit-period")?.value || "year";
-  const selectedDate = document.getElementById("profit-date")?.value || dateInputValue(Date.now());
+  const todayValue = dateInputValue(Date.now());
+  const referenceDate = document.getElementById("profit-date")?.value || todayValue;
+  const currentYear = new Date().getFullYear();
+  const selectedYear = Number(document.getElementById("profit-year")?.value)
+    || Number(referenceDate.slice(0, 4))
+    || currentYear;
+  const selectedMonth = Number(document.getElementById("profit-month")?.value)
+    || Number(referenceDate.slice(5, 7))
+    || new Date().getMonth() + 1;
+  const selectedDate = period === "year"
+    ? `${selectedYear}-01-01`
+    : period === "month"
+      ? `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`
+      : referenceDate;
+  const availableYears = [...new Set([
+    currentYear,
+    selectedYear,
+    ...state.orders.map((order) => new Date(order.createdAt).getFullYear()).filter(Number.isFinite),
+  ])].sort((a, b) => b - a);
   const low = state.products.filter((p) => p.stock <= p.minStock);
   const sku = state.products.length;
   const units = state.products.reduce((s, p) => s + Number(p.stock), 0);
@@ -292,9 +310,14 @@ function renderDashboard() {
   const profit = periodOrders
     .reduce((sum, order) => sum + orderProfit(order), 0);
   const periodLabels = { day: "ngày", week: "tuần", month: "tháng", year: "năm" };
-  const profitLabel = period === "year" ? "Lợi nhuận (chưa hủy)" : `Lợi nhuận (${periodLabels[period]})`;
-  const filteredPeriodLabel = period === "year" ? "chưa hủy" : `${periodLabels[period]}, chưa hủy`;
-  const openOrdersLabel = period === "year" ? "Đơn đang xử lý" : `Đơn đang xử lý (${periodLabels[period]})`;
+  const periodName = period === "year"
+    ? String(selectedYear)
+    : period === "month"
+      ? `${String(selectedMonth).padStart(2, "0")}/${selectedYear}`
+      : periodLabels[period];
+  const profitLabel = `Lợi nhuận (${periodName})`;
+  const filteredPeriodLabel = `${periodName}, chưa hủy`;
+  const openOrdersLabel = `Đơn đang xử lý (${periodName})`;
 
   document.getElementById("view-dashboard").innerHTML = `
     <div class="toolbar dashboard-filters">
@@ -306,7 +329,20 @@ function renderDashboard() {
           <option value="year" ${period === "year" ? "selected" : ""}>Năm</option>
         </select>
       </label>
-      <label>Ngày mốc<input id="profit-date" type="date" value="${selectedDate}" ${period === "year" ? "disabled" : ""} /></label>
+      ${period === "year" ? `
+        <label>Năm
+          <select id="profit-year">${availableYears.map((year) => `<option value="${year}" ${year === selectedYear ? "selected" : ""}>${year}</option>`).join("")}</select>
+        </label>
+      ` : period === "month" ? `
+        <label>Năm
+          <select id="profit-year">${availableYears.map((year) => `<option value="${year}" ${year === selectedYear ? "selected" : ""}>${year}</option>`).join("")}</select>
+        </label>
+        <label>Tháng
+          <select id="profit-month">${Array.from({ length: 12 }, (_, index) => index + 1).map((month) => `<option value="${month}" ${month === selectedMonth ? "selected" : ""}>${month}</option>`).join("")}</select>
+        </label>
+      ` : `
+        <label>Ngày mốc<input id="profit-date" type="date" value="${referenceDate}" /></label>
+      `}
     </div>
     <div class="cards">
       <div class="card"><div class="label">Mã hàng</div><div class="value">${sku}</div></div>
@@ -333,7 +369,9 @@ function renderDashboard() {
     </div>
   `;
   document.getElementById("profit-period").onchange = renderDashboard;
-  document.getElementById("profit-date").onchange = renderDashboard;
+  document.getElementById("profit-year")?.addEventListener("change", renderDashboard);
+  document.getElementById("profit-month")?.addEventListener("change", renderDashboard);
+  document.getElementById("profit-date")?.addEventListener("change", renderDashboard);
 }
 
 function renderInventory() {
