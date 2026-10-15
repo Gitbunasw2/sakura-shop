@@ -302,6 +302,10 @@ th {
   box-shadow: var(--shadow);
 }
 
+.modal-card.wide {
+  width: min(960px, 100%);
+}
+
 .modal-head {
   display: flex;
   justify-content: space-between;
@@ -353,6 +357,24 @@ th {
 .product-picker {
   position: relative;
   min-width: 0;
+}
+
+.selected-product-info {
+  display: grid;
+  gap: 3px;
+  margin-top: 6px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.selected-product-info span {
+  color: var(--muted);
 }
 
 .product-suggestions {

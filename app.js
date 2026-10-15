@@ -247,6 +247,7 @@ function setView(view) {
 function openModal(title, html) {
   document.getElementById("modal-title").textContent = title;
   document.getElementById("modal-body").innerHTML = html;
+  document.querySelector("#modal .modal-card").classList.toggle("wide", title.startsWith("Tạo đơn hàng") || title.startsWith("Sửa đơn "));
   document.getElementById("modal").classList.remove("hidden");
 }
 
@@ -930,6 +931,21 @@ function productOptionLabel(product) {
   return `${product.sku} — ${product.name}${details ? ` (${details})` : ""}`;
 }
 
+function renderSelectedProductInfo(container, product) {
+  if (!product) {
+    container.innerHTML = "";
+    container.classList.add("hidden");
+    return;
+  }
+  const details = [product.variant, product.color].filter(Boolean).map(esc).join(" · ");
+  container.innerHTML = `
+    <strong>${esc(product.sku)} — ${esc(product.name)}</strong>
+    <span>${details || "Không có thông tin size/màu"}</span>
+    <span>Giá: ${money(product.price)} · Tồn kho: ${product.stock}</span>
+  `;
+  container.classList.remove("hidden");
+}
+
 function renderProductSuggestions(list, query, onSelect) {
   const matches = productsForOrderSearch(query);
   list.innerHTML = matches.length
@@ -957,6 +973,7 @@ function addLine(productId, quantity = 1) {
     <div class="product-picker">
       <input class="product-search" type="search" autocomplete="off" aria-autocomplete="list" aria-expanded="false" placeholder="Nhập SKU, tên, size hoặc màu để chọn..." value="${selectedProduct ? esc(productOptionLabel(selectedProduct)) : ""}" />
       <div class="product-suggestions hidden" role="listbox"></div>
+      <div class="selected-product-info${selectedProduct ? "" : " hidden"}"></div>
       <input type="hidden" name="pid" value="${esc(selectedProduct?.id || "")}" />
     </div>
     <input name="qty" type="number" min="1" step="1" value="${quantity}" />
@@ -965,9 +982,12 @@ function addLine(productId, quantity = 1) {
   const searchInput = row.querySelector(".product-search");
   const productIdInput = row.querySelector("[name=pid]");
   const suggestions = row.querySelector(".product-suggestions");
+  const selectedProductInfo = row.querySelector(".selected-product-info");
+  renderSelectedProductInfo(selectedProductInfo, selectedProduct);
   const selectProduct = (product) => {
     searchInput.value = productOptionLabel(product);
     productIdInput.value = product.id;
+    renderSelectedProductInfo(selectedProductInfo, product);
     suggestions.classList.add("hidden");
     searchInput.setAttribute("aria-expanded", "false");
     updateOrderPaymentSummary();
@@ -975,6 +995,7 @@ function addLine(productId, quantity = 1) {
   searchInput.oninput = () => {
     const selected = state.products.find((product) => productOptionLabel(product) === searchInput.value);
     productIdInput.value = selected?.id || "";
+    renderSelectedProductInfo(selectedProductInfo, selected);
     renderProductSuggestions(suggestions, selected ? "" : searchInput.value, selectProduct);
     searchInput.setAttribute("aria-expanded", String(!selected && Boolean(searchInput.value.trim())));
     updateOrderPaymentSummary();
