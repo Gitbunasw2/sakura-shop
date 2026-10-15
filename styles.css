@@ -345,9 +345,15 @@ th {
 
 .line {
   display: grid;
-  grid-template-columns: 1fr 90px 90px auto;
+  grid-template-columns: minmax(0, 1fr) 90px auto;
   gap: 8px;
   align-items: center;
+}
+
+.product-picker {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
 }
 
 .toast {

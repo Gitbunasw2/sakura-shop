@@ -915,11 +915,22 @@ function orderForm(orderId) {
   document.getElementById("order-form").onsubmit = (e) => submitOrder(e, orderId);
 }
 
-function productOptions(selectedId) {
-  return state.products.map((p) => {
-    const details = [p.variant, p.color].filter(Boolean).map(esc).join(" / ");
-    return `<option value="${esc(p.id)}" ${p.id === selectedId ? "selected" : ""}>${esc(p.sku)} — ${esc(p.name)}${details ? ` (${details})` : ""} (tồn ${p.stock})</option>`;
+function productsForOrderSearch(query) {
+  const searchValue = normalizeText(query);
+  return state.products.filter((product) => {
+    const searchableText = [product.sku, product.name, product.brand, product.variant, product.color]
+      .map(normalizeText)
+      .join(" ");
+    return !searchValue || searchableText.includes(searchValue);
+  });
+}
+
+function productOptions(selectedId, query = "") {
+  const options = productsForOrderSearch(query).map((product) => {
+    const details = [product.variant, product.color].filter(Boolean).map(esc).join(" / ");
+    return `<option value="${esc(product.id)}" ${product.id === selectedId ? "selected" : ""}>${esc(product.sku)} — ${esc(product.name)}${details ? ` (${details})` : ""} · ${money(product.price)} · tồn ${product.stock}</option>`;
   }).join("");
+  return `<option value="">Chọn sản phẩm...</option>${options}`;
 }
 
 function addLine(productId, quantity = 1) {
@@ -927,11 +938,24 @@ function addLine(productId, quantity = 1) {
   const row = document.createElement("div");
   row.className = "line";
   row.innerHTML = `
-    <select name="pid">${productOptions(productId)}</select>
+    <div class="product-picker">
+      <input class="product-search" type="search" placeholder="Tìm SKU, tên, size, màu..." />
+      <select name="pid">${productOptions(productId)}</select>
+    </div>
     <input name="qty" type="number" min="1" step="1" value="${quantity}" />
     <button type="button" class="btn danger rm">X</button>
   `;
-  row.querySelector("select").onchange = updateOrderPaymentSummary;
+  const searchInput = row.querySelector(".product-search");
+  const productSelect = row.querySelector("[name=pid]");
+  searchInput.oninput = () => {
+    const selectedId = productSelect.value;
+    productSelect.innerHTML = productOptions(selectedId, searchInput.value);
+    if (!productsForOrderSearch(searchInput.value).some((product) => product.id === selectedId)) {
+      productSelect.value = "";
+    }
+    updateOrderPaymentSummary();
+  };
+  productSelect.onchange = updateOrderPaymentSummary;
   row.querySelector("[name=qty]").oninput = updateOrderPaymentSummary;
   row.querySelector(".rm").onclick = () => {
     row.remove();
@@ -975,7 +999,7 @@ function submitOrder(e, orderId) {
     const pid = line.querySelector("[name=pid]").value;
     const qty = Number(line.querySelector("[name=qty]").value);
     const p = productById(pid);
-    if (!p || !Number.isInteger(qty) || qty < 1) return toast("Số lượng không hợp lệ");
+    if (!p || !Number.isInteger(qty) || qty < 1) return toast("Vui lòng chọn sản phẩm và nhập số lượng hợp lệ");
     requestedQuantities.set(pid, (requestedQuantities.get(pid) || 0) + qty);
     items.push({
       productId: p.id,
