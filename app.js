@@ -161,6 +161,7 @@ function orderProfit(order) {
 }
 
 function orderAmountDue(order) {
+  if (order.status === "cancelled") return 0;
   const paidAmount = ["paid", "done"].includes(order.status)
     ? order.total
     : Number(order.depositAmount || 0);
@@ -587,8 +588,8 @@ function orderForm(orderId) {
     return;
   }
   const availableStatuses = existingOrder
-    ? ["new", "confirmed", "pending_payment", "deposited", "paid", "shipping", "done"]
-    : ["new", "confirmed", "pending_payment", "deposited", "paid"];
+    ? ["new", "confirmed", "pending_payment", "deposited", "paid", "shipping", "done", "cancelled"]
+    : ["new", "confirmed", "pending_payment", "deposited", "paid", "cancelled"];
   openModal(existingOrder ? "Sửa đơn " + existingOrder.code : "Tạo đơn hàng", `
     <form id="order-form" class="stack">
       <div class="form-grid">
@@ -608,7 +609,7 @@ function orderForm(orderId) {
       </div>
       <h3 style="margin:16px 0 8px">Sản phẩm</h3>
       <div id="lines" class="order-lines"></div>
-      <button type="button" class="btn secondary" id="add-line">Thêm dòng</button>
+      <button type="button" class="btn secondary" id="add-line">Thêm sản phẩm</button>
       <div class="order-payment-summary">
         <p>Tổng đơn: <strong id="new-order-total">0 đ</strong></p>
         <p>Khách cần thanh toán: <strong id="new-order-amount-due">0 đ</strong></p>
@@ -674,7 +675,9 @@ function updateOrderPaymentSummary() {
   const total = productTotal + shippingFee;
   const status = document.getElementById("new-order-status")?.value;
   const depositAmount = Number(document.getElementById("new-deposit-amount")?.value) || 0;
-  const paidAmount = ["paid", "done"].includes(status) ? total : status === "deposited" ? depositAmount : 0;
+  const paidAmount = ["paid", "done", "cancelled"].includes(status)
+    ? total
+    : status === "deposited" ? depositAmount : 0;
   const totalElement = document.getElementById("new-order-total");
   const dueElement = document.getElementById("new-order-amount-due");
   if (totalElement) totalElement.textContent = money(total);
@@ -690,6 +693,7 @@ function submitOrder(e, orderId) {
 
   const items = [];
   const requestedQuantities = new Map();
+  const status = fd.get("status");
   for (const line of lines) {
     const pid = line.querySelector("[name=pid]").value;
     const qty = Number(line.querySelector("[name=qty]").value);
@@ -714,10 +718,12 @@ function submitOrder(e, orderId) {
       originalQuantities.set(item.productId, (originalQuantities.get(item.productId) || 0) + item.qty);
     });
   }
-  for (const [pid, qty] of requestedQuantities) {
-    const product = productById(pid);
-    const available = product.stock + (originalQuantities.get(pid) || 0);
-    if (qty > available) return toast("Số lượng không hợp lệ hoặc vượt tồn kho");
+  if (status !== "cancelled") {
+    for (const [pid, qty] of requestedQuantities) {
+      const product = productById(pid);
+      const available = product.stock + (originalQuantities.get(pid) || 0);
+      if (qty > available) return toast("Số lượng không hợp lệ hoặc vượt tồn kho");
+    }
   }
 
   const shippingFee = Number(fd.get("shippingFee")) || 0;
@@ -725,7 +731,6 @@ function submitOrder(e, orderId) {
     return toast("Phí vận chuyển không hợp lệ");
   }
   const total = items.reduce((sum, item) => sum + item.qty * item.price, 0) + shippingFee;
-  const status = fd.get("status");
   let depositAmount = existingOrder?.depositAmount || 0;
   if (status === "deposited") {
     depositAmount = Number(fd.get("depositAmount"));
@@ -735,7 +740,7 @@ function submitOrder(e, orderId) {
   } else if (["paid", "done"].includes(status)) {
     depositAmount = total;
   }
-  if (depositAmount > total) {
+  if (status !== "cancelled" && depositAmount > total) {
     return toast("Tổng đơn không thể thấp hơn số tiền khách đã thanh toán");
   }
 
@@ -745,7 +750,9 @@ function submitOrder(e, orderId) {
       if (product) product.stock += item.qty;
     });
   }
-  items.forEach((item) => { productById(item.productId).stock -= item.qty; });
+  if (status !== "cancelled") {
+    items.forEach((item) => { productById(item.productId).stock -= item.qty; });
+  }
 
   const order = {
     ...(existingOrder || {}),
@@ -788,7 +795,7 @@ function orderDetail(id) {
     <p>Còn phải trả: <strong id="order-remaining-amount">${money(orderAmountDue(o))}</strong></p>
     <label>Trạng thái
       <select id="st-change" ${o.status === "cancelled" ? "disabled" : ""}>
-        ${Object.entries(STATUSES).filter(([k]) => k !== "cancelled").map(([k, v]) => `<option value="${k}" ${o.status === k ? "selected" : ""}>${v}</option>`).join("")}
+        ${Object.entries(STATUSES).map(([k, v]) => `<option value="${k}" ${o.status === k ? "selected" : ""}>${v}</option>`).join("")}
       </select>
     </label>
     <label id="edit-deposit-field" class="${o.status === "deposited" ? "" : "hidden"}">Tiền cọc (đ)
@@ -813,6 +820,18 @@ function orderDetail(id) {
   if (editButton) editButton.onclick = () => orderForm(id);
   document.getElementById("save-st").onclick = () => {
     const nextStatus = statusSelect.value;
+    if (nextStatus === "cancelled") {
+      if (!confirm("Hủy đơn và hoàn kho?")) return;
+      o.items.forEach((item) => {
+        const product = productById(item.productId);
+        if (product) product.stock += item.qty;
+      });
+      o.status = "cancelled";
+      save();
+      closeModal();
+      render();
+      return;
+    }
     if (nextStatus === "deposited") {
       const amount = Number(depositInput.value);
       if (!Number.isFinite(amount) || amount <= 0 || amount > o.total) {
@@ -830,12 +849,8 @@ function orderDetail(id) {
   const cancelBtn = document.getElementById("cancel-order");
   if (cancelBtn) {
     cancelBtn.onclick = () => {
-      if (!confirm("Hủy đơn và hoàn kho?")) return;
-      o.items.forEach((i) => { const p = productById(i.productId); if (p) p.stock += i.qty; });
-      o.status = "cancelled";
-      save();
-      closeModal();
-      render();
+      statusSelect.value = "cancelled";
+      document.getElementById("save-st").click();
     };
   }
 }
