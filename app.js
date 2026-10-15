@@ -904,7 +904,10 @@ function orderForm(orderId) {
 }
 
 function productOptions(selectedId) {
-  return state.products.map((p) => `<option value="${esc(p.id)}" ${p.id === selectedId ? "selected" : ""}>${esc(p.sku)} — ${esc(p.name)} (tồn ${p.stock})</option>`).join("");
+  return state.products.map((p) => {
+    const details = [p.variant, p.color].filter(Boolean).map(esc).join(" / ");
+    return `<option value="${esc(p.id)}" ${p.id === selectedId ? "selected" : ""}>${esc(p.sku)} — ${esc(p.name)}${details ? ` (${details})` : ""} (tồn ${p.stock})</option>`;
+  }).join("");
 }
 
 function addLine(productId, quantity = 1) {
