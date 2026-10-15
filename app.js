@@ -182,6 +182,25 @@ function formatOrderDate(timestamp) {
   return new Intl.DateTimeFormat("vi-VN").format(new Date(timestamp));
 }
 
+function orderMatchesPeriod(order, period, selectedDate) {
+  const [year, month, day] = selectedDate.split("-").map(Number);
+  const referenceDate = new Date(year, month - 1, day);
+  const orderDate = new Date(order.createdAt);
+  if (Number.isNaN(referenceDate.getTime()) || Number.isNaN(orderDate.getTime())) return false;
+
+  if (period === "day") return dateInputValue(order.createdAt) === selectedDate;
+  if (period === "month") {
+    return orderDate.getFullYear() === year && orderDate.getMonth() === month - 1;
+  }
+  if (period === "year") return orderDate.getFullYear() === year;
+
+  referenceDate.setDate(referenceDate.getDate() - ((referenceDate.getDay() + 6) % 7));
+  const weekEnd = new Date(referenceDate);
+  weekEnd.setDate(weekEnd.getDate() + 7);
+  orderDate.setHours(0, 0, 0, 0);
+  return orderDate >= referenceDate && orderDate < weekEnd;
+}
+
 async function fetchInternetDate() {
   const response = await fetch("https://worldtimeapi.org/api/timezone/Asia/Ho_Chi_Minh", {
     cache: "no-store",
@@ -254,6 +273,8 @@ function render() {
 }
 
 function renderDashboard() {
+  const period = document.getElementById("profit-period")?.value || "month";
+  const selectedDate = document.getElementById("profit-date")?.value || dateInputValue(Date.now());
   const low = state.products.filter((p) => p.stock <= p.minStock);
   const sku = state.products.length;
   const units = state.products.reduce((s, p) => s + Number(p.stock), 0);
@@ -261,13 +282,29 @@ function renderDashboard() {
   const revenue = state.orders
     .filter((o) => o.status !== "cancelled")
     .reduce((s, o) => s + o.total, 0);
+  const profit = state.orders
+    .filter((o) => o.status !== "cancelled" && orderMatchesPeriod(o, period, selectedDate))
+    .reduce((sum, order) => sum + orderProfit(order), 0);
+  const periodLabels = { day: "ngày", week: "tuần", month: "tháng", year: "năm" };
 
   document.getElementById("view-dashboard").innerHTML = `
+    <div class="toolbar dashboard-filters">
+      <label>Kỳ lợi nhuận
+        <select id="profit-period">
+          <option value="day" ${period === "day" ? "selected" : ""}>Ngày</option>
+          <option value="week" ${period === "week" ? "selected" : ""}>Tuần</option>
+          <option value="month" ${period === "month" ? "selected" : ""}>Tháng</option>
+          <option value="year" ${period === "year" ? "selected" : ""}>Năm</option>
+        </select>
+      </label>
+      <label>Ngày mốc<input id="profit-date" type="date" value="${selectedDate}" /></label>
+    </div>
     <div class="cards">
       <div class="card"><div class="label">Mã hàng</div><div class="value">${sku}</div></div>
       <div class="card"><div class="label">Tổng tồn</div><div class="value">${units}</div></div>
       <div class="card"><div class="label">Đơn đang xử lý</div><div class="value">${openOrders}</div></div>
       <div class="card"><div class="label">Doanh thu (chưa hủy)</div><div class="value" style="font-size:20px">${money(revenue)}</div></div>
+      <div class="card"><div class="label">Lợi nhuận (${periodLabels[period]})</div><div class="value" style="font-size:20px">${money(profit)}</div></div>
     </div>
     <div class="card list-block">
       <h3>Sắp hết hàng</h3>
@@ -285,6 +322,8 @@ function renderDashboard() {
       }
     </div>
   `;
+  document.getElementById("profit-period").onchange = renderDashboard;
+  document.getElementById("profit-date").onchange = renderDashboard;
 }
 
 function renderInventory() {
