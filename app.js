@@ -273,7 +273,7 @@ function render() {
 }
 
 function renderDashboard() {
-  const period = document.getElementById("profit-period")?.value || "month";
+  const period = document.getElementById("profit-period")?.value || "year";
   const selectedDate = document.getElementById("profit-date")?.value || dateInputValue(Date.now());
   const low = state.products.filter((p) => p.stock <= p.minStock);
   const sku = state.products.length;
