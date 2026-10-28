@@ -178,6 +178,11 @@ textarea {
   color: var(--ink);
 }
 
+input:read-only {
+  background: var(--paper);
+  color: var(--muted);
+}
+
 .search {
   min-width: 240px;
   flex: 1;
