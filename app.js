@@ -1013,7 +1013,7 @@ function renderInvoices() {
     </div>
     ${invoices.length
       ? `<div class="table-wrap"><table><thead><tr>
-        <th>Ngày</th><th>Mã hóa đơn</th><th>Loại</th><th>Trạng thái</th><th>Tiền</th><th>Sản phẩm</th><th>Phí vận chuyển</th><th>Chi phí phát sinh</th><th>Giá trị hóa đơn</th><th>Trừ vốn Việt</th><th>Trừ vốn yên</th><th></th>
+        <th>Ngày</th><th>Mã hóa đơn</th><th>Loại</th><th>Trạng thái</th><th>Tiền</th><th>Sản phẩm</th><th>Ghi chú chi phí phát sinh</th><th>Giá trị hóa đơn</th><th>Trừ vốn Việt</th><th>Trừ vốn yên</th><th></th>
       </tr></thead><tbody>
       ${invoices.map((invoice) => {
         const productSummary = invoice.items.map((item) => `${item.name} × ${item.quantity || item.qty}`).join(", ");
@@ -1026,8 +1026,7 @@ function renderInvoices() {
           <td><span class="badge ${unsupported ? "unsupported" : "ok"}">${invoiceStatusLabel(invoice)}</span></td>
           <td>${yen ? "Tiền yên" : "Tiền Việt"}</td>
           <td>${esc(productSummary)}</td>
-          <td>${yen ? "—" : money(invoice.shippingFee)}</td>
-          <td>${yen ? (invoice.otherExpenseNote ? esc(invoice.otherExpenseNote) : "—") : money(invoice.otherExpense)}</td>
+          <td>${invoice.otherExpenseNote ? esc(invoice.otherExpenseNote) : "—"}</td>
           <td><strong>${invoiceValueText(invoice)}</strong></td>
           <td>${yen ? "—" : money(invoice.capitalDeductVnd)}</td>
           <td>${yen ? moneyJpy(invoice.capitalDeductJpy) : "—"}</td>
@@ -1105,18 +1104,17 @@ function invoiceForm(id) {
       <div id="invoice-lines" class="order-lines"></div>
       <button type="button" class="btn secondary" id="add-invoice-line">Thêm sản phẩm</button>
       <div class="form-grid">
-        <label id="invoice-shipping-wrap">Chi phí vận chuyển (đ)<input id="invoice-shipping-fee" name="shippingFee" type="number" min="0" step="1" value="${existing?.shippingFee ?? 0}" required /></label>
-        <label id="invoice-other-wrap">Chi phí phát sinh (đ)<input id="invoice-other-expense" name="otherExpense" type="number" min="0" step="1" value="${existing?.otherExpense ?? 0}" required /></label>
-        <label class="full"><span id="invoice-value-title">Giá trị hóa đơn (đ)</span>
+        <label class="full"><span id="invoice-value-title">${yen ? "Giá trị hóa đơn (JPY)" : "Giá trị hóa đơn (đ)"}</span>
           <input id="invoice-value" name="invoiceValue" type="number" min="0" step="1" required value="${existing?.invoiceValue ?? ""}" />
         </label>
-        <small id="invoice-value-hint" class="full hidden">Số này đã gồm phí vận chuyển và chi phí phát sinh.</small>
-        <label id="invoice-other-note-wrap" class="full hidden">Ghi chú chi phí phát sinh
+        <small id="invoice-value-hint" class="full">Số này đã gồm phí vận chuyển và chi phí phát sinh.</small>
+        <label class="full">Ghi chú chi phí phát sinh
           <textarea name="otherExpenseNote" rows="2" maxlength="300" placeholder="Ví dụ: phí kiểm hàng, phụ phí...">${esc(existing?.otherExpenseNote || "")}</textarea>
         </label>
-        <label id="invoice-deduct-vnd-wrap">Trừ vốn tiền Việt (đ)<input name="capitalDeductVnd" type="number" min="0" step="1" value="${existing?.capitalDeductVnd ?? 0}" /></label>
-        <label id="invoice-deduct-jpy-wrap" class="hidden">Trừ vốn tiền yên (JPY)<input name="capitalDeductJpy" type="number" min="0" step="1" value="${existing?.capitalDeductJpy ?? 0}" /></label>
-        <small id="invoice-capital-hint" class="full">Vốn tiền Việt còn lại: ${money(capital.vnd)}</small>
+        <label class="full"><span id="invoice-deduct-title">${yen ? "Trừ vốn tiền yên (JPY)" : "Trừ vốn tiền Việt (đ)"}</span>
+          <input id="invoice-deduct" name="capitalDeduct" type="number" min="0" step="1" value="${yen ? (existing?.capitalDeductJpy ?? 0) : (existing?.capitalDeductVnd ?? 0)}" />
+        </label>
+        <small id="invoice-capital-hint" class="full">${yen ? `Vốn tiền yên còn lại: ${moneyJpy(capital.yen)}` : `Vốn tiền Việt còn lại: ${money(capital.vnd)}`}</small>
       </div>
       </div>
       <div class="form-actions">
@@ -1127,37 +1125,21 @@ function invoiceForm(id) {
   `);
 
   const currencyToggle = document.getElementById("invoice-currency");
-  const shippingWrap = document.getElementById("invoice-shipping-wrap");
-  const otherWrap = document.getElementById("invoice-other-wrap");
-  const shippingInput = document.getElementById("invoice-shipping-fee");
-  const otherInput = document.getElementById("invoice-other-expense");
   const valueTitle = document.getElementById("invoice-value-title");
-  const valueHint = document.getElementById("invoice-value-hint");
-  const noteWrap = document.getElementById("invoice-other-note-wrap");
-  const deductVndWrap = document.getElementById("invoice-deduct-vnd-wrap");
-  const deductJpyWrap = document.getElementById("invoice-deduct-jpy-wrap");
+  const deductTitle = document.getElementById("invoice-deduct-title");
   const capitalHint = document.getElementById("invoice-capital-hint");
   const vndSide = document.getElementById("invoice-vnd-side");
   const yenSide = document.getElementById("invoice-yen-side");
   const updateInvoiceCurrency = () => {
-    const yen = currencyToggle.checked;
-    vndSide.style.fontWeight = yen ? "400" : "600";
-    yenSide.style.fontWeight = yen ? "600" : "400";
-    shippingWrap.classList.toggle("hidden", yen);
-    otherWrap.classList.toggle("hidden", yen);
-    shippingInput.required = !yen;
-    otherInput.required = !yen;
-    valueTitle.textContent = yen ? "Giá trị hóa đơn (JPY)" : "Giá trị hóa đơn (đ)";
-    valueHint.classList.toggle("hidden", !yen);
-    noteWrap.classList.toggle("hidden", !yen);
-    deductVndWrap.classList.toggle("hidden", yen);
-    deductJpyWrap.classList.toggle("hidden", !yen);
-    capitalHint.textContent = yen
+    const yenInvoice = currencyToggle.checked;
+    vndSide.style.fontWeight = yenInvoice ? "400" : "600";
+    yenSide.style.fontWeight = yenInvoice ? "600" : "400";
+    valueTitle.textContent = yenInvoice ? "Giá trị hóa đơn (JPY)" : "Giá trị hóa đơn (đ)";
+    deductTitle.textContent = yenInvoice ? "Trừ vốn tiền yên (JPY)" : "Trừ vốn tiền Việt (đ)";
+    capitalHint.textContent = yenInvoice
       ? `Vốn tiền yên còn lại: ${moneyJpy(capital.yen)}`
       : `Vốn tiền Việt còn lại: ${money(capital.vnd)}`;
     if (document.getElementById("invoice-type")?.value === "export" && !editing) {
-      shippingInput.required = false;
-      otherInput.required = false;
       document.getElementById("invoice-value").required = false;
     }
   };
@@ -1175,8 +1157,6 @@ function invoiceForm(id) {
     unsupportedBox.classList.toggle("hidden", !unsupported);
     supportedBox.classList.toggle("hidden", unsupported);
     submitButton.disabled = unsupported;
-    shippingInput.required = !unsupported && !currencyToggle.checked;
-    otherInput.required = !unsupported && !currencyToggle.checked;
     document.getElementById("invoice-value").required = !unsupported;
   };
   typeSelect.onchange = updateInvoiceType;
@@ -1229,11 +1209,12 @@ function submitInvoice(event, invoiceId) {
   if (type === "export" && !existing) return toast("Hóa đơn xuất hàng hiện chưa hỗ trợ");
   const currency = document.getElementById("invoice-currency")?.checked ? "jpy" : "vnd";
   const invoiceValue = Number(formData.get("invoiceValue"));
-  const shippingFee = currency === "jpy" ? 0 : Number(formData.get("shippingFee"));
-  const otherExpense = currency === "jpy" ? 0 : Number(formData.get("otherExpense"));
-  const otherExpenseNote = currency === "jpy" ? String(formData.get("otherExpenseNote") || "").trim() : "";
-  const capitalDeductVnd = currency === "vnd" ? Number(formData.get("capitalDeductVnd") || 0) : 0;
-  const capitalDeductJpy = currency === "jpy" ? Number(formData.get("capitalDeductJpy") || 0) : 0;
+  const shippingFee = 0;
+  const otherExpense = 0;
+  const otherExpenseNote = String(formData.get("otherExpenseNote") || "").trim();
+  const capitalDeduct = Number(formData.get("capitalDeduct") || 0);
+  const capitalDeductVnd = currency === "vnd" ? capitalDeduct : 0;
+  const capitalDeductJpy = currency === "jpy" ? capitalDeduct : 0;
   if ([shippingFee, otherExpense, invoiceValue, capitalDeductVnd, capitalDeductJpy].some((amount) => !Number.isFinite(amount) || amount < 0)) {
     return toast("Chi phí, giá trị hóa đơn và số trừ vốn phải là số không âm");
   }
@@ -1290,14 +1271,9 @@ function invoiceDetails(id) {
         <td>${item.quantity}</td>
       </tr>`).join("")}
     </tbody></table>
-    ${yen
-      ? `<p>Giá trị hóa đơn (đã gồm phí vận chuyển và chi phí phát sinh): <strong>${moneyJpy(invoice.invoiceValue)}</strong></p>
-         <p>Ghi chú chi phí phát sinh: ${esc(invoice.otherExpenseNote || "—")}</p>
-         <p>Trừ vốn tiền yên: ${moneyJpy(invoice.capitalDeductJpy)}</p>`
-      : `<p>Chi phí vận chuyển: ${money(invoice.shippingFee)}</p>
-         <p>Chi phí phát sinh: ${money(invoice.otherExpense)}</p>
-         <p><strong>Giá trị hóa đơn: ${money(invoice.invoiceValue)}</strong></p>
-         <p>Trừ vốn tiền Việt: ${money(invoice.capitalDeductVnd)}</p>`}
+    <p>Giá trị hóa đơn (đã gồm phí vận chuyển và chi phí phát sinh): <strong>${invoiceValueText(invoice)}</strong></p>
+    <p>Ghi chú chi phí phát sinh: ${esc(invoice.otherExpenseNote || "—")}</p>
+    <p>${yen ? `Trừ vốn tiền yên: ${moneyJpy(invoice.capitalDeductJpy)}` : `Trừ vốn tiền Việt: ${money(invoice.capitalDeductVnd)}`}</p>
     <div class="form-actions">
       <button class="btn secondary" id="edit-invoice" type="button">Sửa</button>
       <button class="btn danger" id="delete-invoice" type="button">Xóa</button>
