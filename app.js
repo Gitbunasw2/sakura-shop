@@ -1028,7 +1028,7 @@ function renderInvoices() {
         <th>Ngày</th><th>Mã hóa đơn</th><th>Loại</th><th>Trạng thái</th><th>Tiền</th><th>Sản phẩm</th><th>Phụ phí</th><th>Ghi chú</th><th>Trừ vốn</th><th></th>
       </tr></thead><tbody>
       ${invoices.map((invoice) => {
-        const productSummary = invoice.items.map((item) => `${item.name} × ${item.quantity || item.qty}`).join(", ");
+        const productSummary = (invoice.items || []).map((item) => `${item.name} × ${item.quantity || item.qty}`).join(", ") || "Không có sản phẩm";
         const yen = invoiceCurrency(invoice) === "jpy";
         const unsupported = invoice.type === "export";
         return `<tr>
@@ -1080,14 +1080,11 @@ function addInvoiceLine(productId = "", quantity = 1) {
 function invoiceForm(id) {
   const existing = id ? state.invoices.find((invoice) => invoice.id === id) : null;
   if (id && !existing) return;
-  if (!state.products.length) {
-    toast("Hãy thêm sản phẩm vào kho trước");
-    return;
-  }
   const editing = Boolean(existing);
   const capital = remainingCapitalExcludingInvoice(existing?.id);
   const yen = invoiceCurrency(existing) === "jpy";
   const typeValue = existing?.type || "import";
+  const includeProducts = Boolean(existing?.items?.length);
 
   openModal(editing ? "Sửa hóa đơn " + existing.code : "Tạo hóa đơn nhập/xuất", `
     <form id="invoice-form" class="stack">
@@ -1111,9 +1108,19 @@ function invoiceForm(id) {
       </div>
       <div id="invoice-unsupported" class="card empty hidden">Hóa đơn xuất hàng hiện chưa hỗ trợ.</div>
       <div id="invoice-supported">
-      <h3>Sản phẩm</h3>
-      <div id="invoice-lines" class="order-lines"></div>
-      <button type="button" class="btn secondary" id="add-invoice-line">Thêm sản phẩm</button>
+      <div class="form-grid">
+      <label class="switch-toggle full">
+        <span>Không nhập sản phẩm</span>
+        <input id="invoice-include-products" type="checkbox" ${includeProducts ? "checked" : ""} />
+        <span class="shipping-payer-switch" aria-hidden="true"></span>
+        <span>Nhập sản phẩm</span>
+      </label>
+      </div>
+      <div id="invoice-products-wrap" class="${includeProducts ? "" : "hidden"}">
+        <h3>Sản phẩm</h3>
+        <div id="invoice-lines" class="order-lines"></div>
+        <button type="button" class="btn secondary" id="add-invoice-line">Thêm sản phẩm</button>
+      </div>
       <div class="form-grid">
         <label class="full"><span id="invoice-surcharge-title">${yen ? "Phụ phí (JPY)" : "Phụ phí (đ)"}</span>
           <input id="invoice-surcharge" name="surcharge" type="number" min="0" step="1" value="${existing ? invoiceSurcharge(existing) : 0}" />
@@ -1169,13 +1176,38 @@ function invoiceForm(id) {
   typeSelect.onchange = updateInvoiceType;
   updateInvoiceType();
 
+  const productsToggle = document.getElementById("invoice-include-products");
+  const productsWrap = document.getElementById("invoice-products-wrap");
+  const setProductFieldsRequired = (required) => {
+    productsWrap.querySelectorAll("[name=productId], [name=quantity]").forEach((input) => {
+      input.required = required;
+    });
+  };
+  const updateProductsToggle = () => {
+    const showProducts = productsToggle.checked;
+    productsWrap.classList.toggle("hidden", !showProducts);
+    if (showProducts) {
+      if (!state.products.length) {
+        productsToggle.checked = false;
+        productsWrap.classList.add("hidden");
+        toast("Hãy thêm sản phẩm vào kho trước");
+        return;
+      }
+      if (!document.querySelector("#invoice-lines .invoice-line")) addInvoiceLine();
+    }
+    setProductFieldsRequired(showProducts);
+  };
+  productsToggle.onchange = updateProductsToggle;
+
   document.getElementById("cancel-modal").onclick = closeModal;
-  document.getElementById("add-invoice-line").onclick = () => addInvoiceLine();
-  if (existing?.items?.length) {
-    existing.items.forEach((item) => addInvoiceLine(item.productId, item.quantity || item.qty || 1));
-  } else {
+  document.getElementById("add-invoice-line").onclick = () => {
     addInvoiceLine();
+    setProductFieldsRequired(productsToggle.checked);
+  };
+  if (includeProducts) {
+    existing.items.forEach((item) => addInvoiceLine(item.productId, item.quantity || item.qty || 1));
   }
+  setProductFieldsRequired(includeProducts);
   document.getElementById("invoice-form").onsubmit = (event) => submitInvoice(event, existing?.id);
 }
 
@@ -1190,27 +1222,30 @@ function submitInvoice(event, invoiceId) {
     return toast("Ngày hóa đơn không hợp lệ");
   }
 
-  const lines = [...document.querySelectorAll("#invoice-lines .invoice-line")];
+  const includeProducts = document.getElementById("invoice-include-products")?.checked;
   const items = [];
   const quantities = new Map();
-  for (const line of lines) {
-    const productId = line.querySelector("[name=productId]").value;
-    const quantity = Number(line.querySelector("[name=quantity]").value);
-    const product = productById(productId);
-    if (!product || !Number.isInteger(quantity) || quantity < 1) {
-      return toast("Chọn hàng hóa và nhập số lượng hợp lệ cho từng dòng");
+  if (includeProducts) {
+    const lines = [...document.querySelectorAll("#invoice-lines .invoice-line")];
+    for (const line of lines) {
+      const productId = line.querySelector("[name=productId]").value;
+      const quantity = Number(line.querySelector("[name=quantity]").value);
+      const product = productById(productId);
+      if (!product || !Number.isInteger(quantity) || quantity < 1) {
+        return toast("Chọn hàng hóa và nhập số lượng hợp lệ cho từng dòng");
+      }
+      quantities.set(productId, (quantities.get(productId) || 0) + quantity);
+      items.push({
+        productId,
+        sku: product.sku,
+        name: product.name,
+        variant: product.variant || "",
+        color: product.color || "",
+        quantity,
+      });
     }
-    quantities.set(productId, (quantities.get(productId) || 0) + quantity);
-    items.push({
-      productId,
-      sku: product.sku,
-      name: product.name,
-      variant: product.variant || "",
-      color: product.color || "",
-      quantity,
-    });
+    if (!items.length) return toast("Thêm sản phẩm hoặc tắt nhập sản phẩm");
   }
-  if (!items.length) return toast("Hãy thêm ít nhất một sản phẩm vào hóa đơn");
 
   const type = formData.get("type");
   if (type === "export" && !existing) return toast("Hóa đơn xuất hàng hiện chưa hỗ trợ");
@@ -1270,13 +1305,15 @@ function invoiceDetails(id) {
     <p>Trạng thái: <span class="badge ${invoice.type === "export" ? "unsupported" : "ok"}">${invoiceStatusLabel(invoice)}</span></p>
     <p>Tiền hóa đơn: <strong>${yen ? "Tiền yên" : "Tiền Việt"}</strong></p>
     <p>Ngày: ${formatOrderDate(new Date(`${invoice.date}T12:00:00`).getTime())}</p>
-    <table><thead><tr><th>SKU</th><th>Sản phẩm</th><th>Size / màu</th><th>Số lượng</th></tr></thead><tbody>
+    ${(invoice.items || []).length
+      ? `<table><thead><tr><th>SKU</th><th>Sản phẩm</th><th>Size / màu</th><th>Số lượng</th></tr></thead><tbody>
       ${invoice.items.map((item) => `<tr>
         <td>${esc(item.sku)}</td><td>${esc(item.name)}</td>
         <td>${esc([item.variant, item.color].filter(Boolean).join(" / ") || "—")}</td>
         <td>${item.quantity}</td>
       </tr>`).join("")}
-    </tbody></table>
+    </tbody></table>`
+      : `<p>Sản phẩm: không nhập sản phẩm</p>`}
     <p>Phụ phí: <strong>${invoiceMoney(invoice, invoiceSurcharge(invoice))}</strong></p>
     <p>Ghi chú: ${esc(invoice.otherExpenseNote || "—")}</p>
     <p>${yen ? "Trừ vốn tiền yên" : "Trừ vốn tiền Việt"}: <strong>${invoiceMoney(invoice, invoiceDeductAmount(invoice))}</strong></p>
