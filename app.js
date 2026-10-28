@@ -734,8 +734,15 @@ function productForm(id) {
       <label>Brand<input name="brand" value="${esc(p.brand || "")}" /></label>
       <label>Size / dung tích<input name="variant" value="${esc(p.variant || "")}" placeholder="M / 170ml" /></label>
       <label>Màu sắc<input name="color" value="${esc(p.color || "")}" placeholder="Trắng / Đen" /></label>
-      <label>Tồn kho<input name="stock" type="number" min="0" value="${p.stock || 0}" /></label>
+      <label>Tồn kho<input id="product-stock" name="stock" type="number" min="0" value="${id ? (p.stock || 0) : 0}" readonly /></label>
       <label>Ngưỡng cảnh báo<input name="minStock" type="number" min="0" value="${p.minStock || 0}" /></label>
+      <label class="switch-toggle full">
+        <span id="product-stock-follow">Nên dùng số lượng trong hóa đơn nhập/xuất</span>
+        <input id="product-stock-manual" type="checkbox" />
+        <span class="shipping-payer-switch" aria-hidden="true"></span>
+        <span id="product-stock-manual-label">Tôi đồng ý sửa thủ công</span>
+      </label>
+      <small id="product-stock-hint" class="full">Tồn kho nên tăng/giảm qua hóa đơn nhập xuất. Bật gạt nếu cần sửa tay.</small>
       <label>Giá gốc VNĐ<input name="costPrice" type="number" min="0" value="${p.costPrice || 0}" /></label>
       <label>Giá gốc JPY<input name="costPriceJpy" type="number" min="0" value="${p.costPriceJpy || 0}" /></label>
       <label>Trọng lượng (kg)<input name="weight" type="number" min="0" step="0.1" value="${p.weight || 0}" /></label>
@@ -749,6 +756,24 @@ function productForm(id) {
     </form>
   `);
   document.getElementById("cancel-modal").onclick = closeModal;
+  const stockInput = document.getElementById("product-stock");
+  const stockManual = document.getElementById("product-stock-manual");
+  const stockFollow = document.getElementById("product-stock-follow");
+  const stockManualLabel = document.getElementById("product-stock-manual-label");
+  const stockHint = document.getElementById("product-stock-hint");
+  const originalStock = id ? Number(p.stock || 0) : 0;
+  const updateStockManual = () => {
+    const manual = stockManual.checked;
+    stockInput.readOnly = !manual;
+    stockFollow.style.fontWeight = manual ? "400" : "600";
+    stockManualLabel.style.fontWeight = manual ? "600" : "400";
+    stockHint.textContent = manual
+      ? "Bạn đang sửa tồn kho thủ công. Nên chỉ dùng khi cần chỉnh lệch."
+      : "Tồn kho nên tăng/giảm qua hóa đơn nhập xuất. Bật gạt nếu cần sửa tay.";
+    if (!manual) stockInput.value = originalStock;
+  };
+  stockManual.onchange = updateStockManual;
+  updateStockManual();
   document.getElementById("product-form").onsubmit = (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -759,7 +784,7 @@ function productForm(id) {
       product.id !== id && String(product.sku || "").trim().toLocaleUpperCase("vi-VN") === skuKey
     );
     if (duplicateSku) return toast("SKU này đã được sử dụng");
-    data.stock = Number(data.stock);
+    data.stock = stockManual.checked ? Number(data.stock) : originalStock;
     data.minStock = Number(data.minStock);
     data.costPrice = Number(data.costPrice);
     data.costPriceJpy = Number(data.costPriceJpy);
