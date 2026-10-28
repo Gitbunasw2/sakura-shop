@@ -161,6 +161,8 @@ function normalizeState(parsed) {
       if (item.costPrice === undefined) item.costPrice = Number(product?.costPrice) || 0;
       if (item.productShippingFee === undefined) item.productShippingFee = Number(product?.shippingFee) || 0;
       if (item.packagingFee === undefined) item.packagingFee = Number(product?.packagingFee) || 0;
+      if (item.variant === undefined) item.variant = product?.variant || "";
+      if (item.color === undefined) item.color = product?.color || "";
     });
   });
   contributions.forEach((contribution) => {
@@ -1370,6 +1372,8 @@ function submitOrder(e, orderId) {
       productId: p.id,
       name: p.name,
       sku: p.sku,
+      variant: p.variant || "",
+      color: p.color || "",
       qty,
       price: p.price,
       costPrice: Number(p.costPrice) || 0,
@@ -1465,8 +1469,15 @@ function orderDetail(id) {
     <p>Địa chỉ: ${esc(o.customerAddress || "—")}</p>
     <p>Đơn vị vận chuyển: ${esc(o.shippingCarrier || "—")}</p>
     <p>Mã vận đơn: ${esc(o.trackingNumber || "—")}</p>
-    <table><thead><tr><th>SP</th><th>SL</th><th>Giá</th></tr></thead>
-    <tbody>${o.items.map((i) => `<tr><td>${i.sku}${i.name}</td><td>${i.qty}</td><td>${money(i.qty * i.price)}</td></tr>`).join("")}</tbody></table>
+    <table><thead><tr><th>SKU</th><th>Sản phẩm</th><th>Size</th><th>Màu sắc</th><th>SL</th><th>Giá</th></tr></thead>
+    <tbody>${o.items.map((i) => `<tr>
+      <td>${esc(i.sku)}</td>
+      <td>${esc(i.name)}</td>
+      <td>${esc(i.variant || productById(i.productId)?.variant || "—")}</td>
+      <td>${esc(i.color || productById(i.productId)?.color || "—")}</td>
+      <td>${i.qty}</td>
+      <td>${money(i.qty * i.price)}</td>
+    </tr>`).join("")}</tbody></table>
     <p>Phí vận chuyển: ${money(o.shippingFee || 0)} · ${o.shippingPayer === "customer" ? "Khách hàng trả" : "Shop trả"}</p>
     <p style="margin-top:12px"><strong>Tổng: ${money(o.total)}</strong></p>
     <p>Lợi nhuận đơn: <strong>${o.status === "cancelled" ? "—" : money(orderProfit(o))}</strong></p>
