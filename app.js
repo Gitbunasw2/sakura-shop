@@ -169,6 +169,9 @@ function normalizeState(parsed) {
     if (contribution.amountVnd === undefined) {
       contribution.amountVnd = Number(contribution.amount || 0);
     }
+    if (contribution.amountJpy === undefined) {
+      contribution.amountJpy = 0;
+    }
   });
   return { products, orders, categories, contributions, invoices };
 }
@@ -413,12 +416,14 @@ function renderDashboard() {
     const name = String(contribution.contributor || "").trim();
     const key = normalizeText(name);
     if (!key) return;
-    const existing = contributionTotals.get(key) || { name, amount: 0 };
+    const existing = contributionTotals.get(key) || { name, amount: 0, amountJpy: 0 };
     existing.amount += Number(contribution.amountVnd || 0);
+    existing.amountJpy += Number(contribution.amountJpy || 0);
     contributionTotals.set(key, existing);
   });
   const totalContributions = [...contributionTotals.values()].reduce((sum, item) => sum + item.amount, 0);
-  const contributorTotals = [...contributionTotals.values()].sort((a, b) => b.amount - a.amount);
+  const totalContributionJpy = [...contributionTotals.values()].reduce((sum, item) => sum + item.amountJpy, 0);
+  const contributorTotals = [...contributionTotals.values()].sort((a, b) => b.amount - a.amount || b.amountJpy - a.amountJpy);
   const periodOrders = state.orders.filter((order) =>
     order.status !== "cancelled" && (period === "year" || orderMatchesPeriod(order, period, selectedDate))
   );
@@ -465,7 +470,7 @@ function renderDashboard() {
       <div class="card"><div class="label">Mã hàng</div><div class="value">${sku}</div></div>
       <div class="card"><div class="label">Tổng tồn</div><div class="value">${units}</div></div>
       <div class="card"><div class="label">Tổng giá trị kho hàng</div><div class="value" style="font-size:20px">${money(inventoryValue)}</div></div>
-      <div class="card"><div class="label">Tổng góp vốn (${periodName})</div><div class="value" style="font-size:20px">${money(totalContributions)}</div></div>
+      <div class="card"><div class="label">Tổng góp vốn (${periodName})</div><div class="value" style="font-size:20px">${money(totalContributions)}</div><div class="label" style="margin-top:8px">${moneyJpy(totalContributionJpy)}</div></div>
       <div class="card"><div class="label">${openOrdersLabel}</div><div class="value">${openOrders}</div></div>
       <div class="card"><div class="label">Doanh thu (${filteredPeriodLabel})</div><div class="value" style="font-size:20px">${money(revenue)}</div></div>
       <div class="card"><div class="label">${profitLabel}</div><div class="value" style="font-size:20px">${money(profit)}</div></div>
@@ -474,10 +479,10 @@ function renderDashboard() {
       <div class="card list-block">
         <h3>Góp vốn theo người (${periodName})</h3>
         ${contributorTotals.length
-          ? `<div class="table-wrap"><table><thead><tr><th>Người góp</th><th>Tổng tiền góp</th><th>Tỷ lệ</th></tr></thead><tbody>
+          ? `<div class="table-wrap"><table><thead><tr><th>Người góp</th><th>Tổng VNĐ</th><th>Tổng JPY</th><th>Tỷ lệ VNĐ</th></tr></thead><tbody>
             ${contributorTotals.map((item) => {
               const share = totalContributions ? (item.amount / totalContributions) * 100 : 0;
-              return `<tr><td><strong>${esc(item.name)}</strong></td><td>${money(item.amount)}</td><td>${share.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%</td></tr>`;
+              return `<tr><td><strong>${esc(item.name)}</strong></td><td>${money(item.amount)}</td><td>${moneyJpy(item.amountJpy)}</td><td>${share.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%</td></tr>`;
             }).join("")}
           </tbody></table></div>`
           : `<div class="empty">Chưa có dữ liệu góp vốn.</div>`}
@@ -1035,18 +1040,21 @@ function invoiceDetails(id) {
 function renderContributions() {
   const contributions = [...state.contributions].sort((a, b) => b.date.localeCompare(a.date));
   const totalVnd = contributions.reduce((sum, contribution) => sum + Number(contribution.amountVnd || 0), 0);
+  const totalJpy = contributions.reduce((sum, contribution) => sum + Number(contribution.amountJpy || 0), 0);
 
   document.getElementById("view-contributions").innerHTML = `
     <div class="cards">
       <div class="card"><div class="label">Tổng góp tiền Việt</div><div class="value" style="font-size:20px">${money(totalVnd)}</div></div>
+      <div class="card"><div class="label">Tổng góp tiền Nhật</div><div class="value" style="font-size:20px">${moneyJpy(totalJpy)}</div></div>
       <div class="card"><div class="label">Số lần góp</div><div class="value">${contributions.length}</div></div>
     </div>
     ${contributions.length
-      ? `<div class="table-wrap"><table><thead><tr><th>Ngày góp vốn</th><th>Người góp</th><th>Số tiền (VNĐ)</th><th></th></tr></thead><tbody>
+      ? `<div class="table-wrap"><table><thead><tr><th>Ngày góp vốn</th><th>Người góp</th><th>Số tiền (VNĐ)</th><th>Số tiền (JPY)</th><th></th></tr></thead><tbody>
         ${contributions.map((contribution) => `<tr>
           <td>${formatOrderDate(new Date(`${contribution.date}T12:00:00`).getTime())}</td>
           <td><strong>${esc(contribution.contributor)}</strong></td>
           <td>${money(contribution.amountVnd)}</td>
+          <td>${moneyJpy(contribution.amountJpy)}</td>
           <td class="row-actions">
             <button class="btn secondary" data-contribution-edit="${esc(contribution.id)}">Sửa</button>
             <button class="btn danger" data-contribution-delete="${esc(contribution.id)}">Xóa</button>
@@ -1072,7 +1080,8 @@ function contributionForm(id) {
     <form id="contribution-form" class="form-grid">
       <label>Ngày góp vốn<input name="date" type="date" required value="${contribution?.date || dateInputValue(Date.now())}" /></label>
       <label>Người góp<input name="contributor" required maxlength="100" value="${esc(contribution?.contributor || "")}" placeholder="Tên người góp vốn" /></label>
-      <label class="full">Số tiền (VNĐ)<input name="amountVnd" type="number" min="1" step="1" required value="${contribution?.amountVnd || ""}" /></label>
+      <label>Số tiền (VNĐ)<input name="amountVnd" type="number" min="0" step="1" value="${contribution?.amountVnd || ""}" placeholder="0" /></label>
+      <label>Số tiền (JPY)<input name="amountJpy" type="number" min="0" step="1" value="${contribution?.amountJpy || ""}" placeholder="0" /></label>
       <div class="form-actions full">
         <button type="button" class="btn secondary" id="cancel-modal">Hủy</button>
         <button class="btn" type="submit">${id ? "Lưu thay đổi" : "Lưu khoản góp"}</button>
@@ -1085,13 +1094,18 @@ function contributionForm(id) {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.target).entries());
     const amountVnd = Number(data.amountVnd) || 0;
-    if (!Number.isFinite(amountVnd) || amountVnd <= 0) return toast("Số tiền góp phải lớn hơn 0");
+    const amountJpy = Number(data.amountJpy) || 0;
+    if (!Number.isFinite(amountVnd) || amountVnd < 0 || !Number.isFinite(amountJpy) || amountJpy < 0) {
+      return toast("Số tiền góp không hợp lệ");
+    }
+    if (amountVnd <= 0 && amountJpy <= 0) return toast("Nhập số tiền Việt hoặc tiền Nhật lớn hơn 0");
 
     const record = {
       id: contribution?.id || uid("capital"),
       date: data.date,
       contributor: data.contributor.trim(),
       amountVnd,
+      amountJpy,
     };
     if (contribution) Object.assign(contribution, record);
     else state.contributions.unshift(record);
