@@ -297,6 +297,41 @@ function remainingCapital(contributions = state.contributions, invoices = state.
   return { vnd: added.vnd - used.vnd, yen: added.yen - used.yen };
 }
 
+function remainingCapitalExcludingInvoice(invoiceId) {
+  return remainingCapital(
+    state.contributions,
+    state.invoices.filter((invoice) => invoice.id !== invoiceId)
+  );
+}
+
+function applyInvoiceStock(items, type, direction) {
+  const sign = (type === "import" ? 1 : -1) * direction;
+  (items || []).forEach((item) => {
+    const product = productById(item.productId);
+    if (!product) return;
+    product.stock = Number(product.stock || 0) + sign * Number(item.quantity || item.qty || 0);
+  });
+}
+
+function invoiceStockConflict(existingInvoice, nextType, nextQuantities) {
+  const projected = new Map(state.products.map((product) => [product.id, Number(product.stock || 0)]));
+  if (existingInvoice) {
+    const reverse = existingInvoice.type === "import" ? -1 : 1;
+    (existingInvoice.items || []).forEach((item) => {
+      const productId = item.productId;
+      projected.set(productId, (projected.get(productId) || 0) + reverse * Number(item.quantity || item.qty || 0));
+    });
+  }
+  const apply = nextType === "import" ? 1 : -1;
+  nextQuantities.forEach((quantity, productId) => {
+    projected.set(productId, (projected.get(productId) || 0) + apply * quantity);
+  });
+  for (const [productId, stock] of projected) {
+    if (stock < 0) return productById(productId)?.sku || productId;
+  }
+  return "";
+}
+
 function defaultContributionRate() {
   const recent = state.contributions.find((contribution) => Number(contribution.exchangeRate) > 0);
   return recent ? Number(recent.exchangeRate) : 180;
@@ -393,7 +428,7 @@ function setView(view) {
 function openModal(title, html) {
   document.getElementById("modal-title").textContent = title;
   document.getElementById("modal-body").innerHTML = html;
-  document.querySelector("#modal .modal-card").classList.toggle("wide", title.startsWith("Tạo đơn hàng") || title.startsWith("Sửa đơn ") || title.startsWith("Tạo hóa đơn"));
+  document.querySelector("#modal .modal-card").classList.toggle("wide", title.startsWith("Tạo đơn hàng") || title.startsWith("Sửa đơn ") || title.startsWith("Tạo hóa đơn") || title.startsWith("Sửa hóa đơn"));
   document.getElementById("modal").classList.remove("hidden");
 }
 
@@ -984,54 +1019,60 @@ function renderInvoices() {
   });
 }
 
-function invoiceProductOptions() {
+function invoiceProductOptions(selectedId) {
   return state.products.map((product) => {
     const details = [product.variant, product.color].filter(Boolean).map(esc).join(" / ");
-    return `<option value="${esc(product.id)}">${esc(product.sku)} — ${esc(product.name)}${details ? ` (${details})` : ""} · tồn ${product.stock} · ${money(product.price)}</option>`;
+    return `<option value="${esc(product.id)}" ${product.id === selectedId ? "selected" : ""}>${esc(product.sku)} — ${esc(product.name)}${details ? ` (${details})` : ""} · tồn ${product.stock} · ${money(product.price)}</option>`;
   }).join("");
 }
 
-function addInvoiceLine() {
+function addInvoiceLine(productId = "", quantity = 1) {
   const container = document.getElementById("invoice-lines");
   const row = document.createElement("div");
   row.className = "line invoice-line";
   row.innerHTML = `
     <select name="productId" required>
       <option value="">Chọn hàng hóa...</option>
-      ${invoiceProductOptions()}
+      ${invoiceProductOptions(productId)}
     </select>
-    <input name="quantity" type="number" min="1" step="1" value="1" required />
+    <input name="quantity" type="number" min="1" step="1" value="${quantity}" required />
     <button type="button" class="btn danger remove-invoice-line" aria-label="Xóa sản phẩm">X</button>
   `;
   row.querySelector(".remove-invoice-line").onclick = () => row.remove();
   container.appendChild(row);
 }
 
-function invoiceForm() {
+function invoiceForm(id) {
+  const existing = id ? state.invoices.find((invoice) => invoice.id === id) : null;
+  if (id && !existing) return;
   if (!state.products.length) {
     toast("Hãy thêm sản phẩm vào kho trước");
     return;
   }
-  const capital = remainingCapital();
+  const editing = Boolean(existing);
+  const capital = remainingCapitalExcludingInvoice(existing?.id);
+  const yen = invoiceCurrency(existing) === "jpy";
+  const typeValue = existing?.type || "import";
 
-  openModal("Tạo hóa đơn nhập/xuất", `
+  openModal(editing ? "Sửa hóa đơn " + existing.code : "Tạo hóa đơn nhập/xuất", `
     <form id="invoice-form" class="stack">
       <div class="form-grid">
         <label>Loại hóa đơn
-          <select name="type" id="invoice-type" required>
-            <option value="import">Nhập hàng</option>
-            <option value="export">Xuất hàng</option>
+          ${editing ? `<input type="hidden" name="type" value="${esc(typeValue)}" />` : ""}
+          <select ${editing ? "" : `name="type"`} id="invoice-type" required ${editing ? "disabled" : ""}>
+            <option value="import" ${typeValue === "import" ? "selected" : ""}>Nhập hàng</option>
+            <option value="export" ${typeValue === "export" ? "selected" : ""}>Xuất hàng</option>
           </select>
         </label>
-        <label>Ngày hóa đơn<input name="date" type="date" required value="${dateInputValue(Date.now())}" /></label>
+        <label>Ngày hóa đơn<input name="date" type="date" required value="${existing?.date || dateInputValue(Date.now())}" /></label>
         <p id="invoice-type-status" class="full hidden">Trạng thái: <span class="badge unsupported">Chưa hỗ trợ</span></p>
         <label class="switch-toggle full">
           <span id="invoice-vnd-side">Hóa đơn tiền Việt</span>
-          <input id="invoice-currency" type="checkbox" />
+          <input id="invoice-currency" type="checkbox" ${yen ? "checked" : ""} />
           <span class="shipping-payer-switch" aria-hidden="true"></span>
           <span id="invoice-yen-side">Hóa đơn tiền yên</span>
         </label>
-        <label class="full">Mã hóa đơn<input name="code" maxlength="80" placeholder="Để trống để tự tạo mã" /></label>
+        <label class="full">Mã hóa đơn<input name="code" maxlength="80" placeholder="Để trống để tự tạo mã" value="${esc(existing?.code || "")}" /></label>
       </div>
       <div id="invoice-unsupported" class="card empty hidden">Hóa đơn xuất hàng hiện chưa hỗ trợ.</div>
       <div id="invoice-supported">
@@ -1039,23 +1080,23 @@ function invoiceForm() {
       <div id="invoice-lines" class="order-lines"></div>
       <button type="button" class="btn secondary" id="add-invoice-line">Thêm sản phẩm</button>
       <div class="form-grid">
-        <label id="invoice-shipping-wrap">Chi phí vận chuyển (đ)<input id="invoice-shipping-fee" name="shippingFee" type="number" min="0" step="1" value="0" required /></label>
-        <label id="invoice-other-wrap">Chi phí phát sinh (đ)<input id="invoice-other-expense" name="otherExpense" type="number" min="0" step="1" value="0" required /></label>
+        <label id="invoice-shipping-wrap">Chi phí vận chuyển (đ)<input id="invoice-shipping-fee" name="shippingFee" type="number" min="0" step="1" value="${existing?.shippingFee ?? 0}" required /></label>
+        <label id="invoice-other-wrap">Chi phí phát sinh (đ)<input id="invoice-other-expense" name="otherExpense" type="number" min="0" step="1" value="${existing?.otherExpense ?? 0}" required /></label>
         <label class="full"><span id="invoice-value-title">Giá trị hóa đơn (đ)</span>
-          <input id="invoice-value" name="invoiceValue" type="number" min="0" step="1" required />
+          <input id="invoice-value" name="invoiceValue" type="number" min="0" step="1" required value="${existing?.invoiceValue ?? ""}" />
         </label>
         <small id="invoice-value-hint" class="full hidden">Số này đã gồm phí vận chuyển và chi phí phát sinh.</small>
         <label id="invoice-other-note-wrap" class="full hidden">Ghi chú chi phí phát sinh
-          <textarea name="otherExpenseNote" rows="2" maxlength="300" placeholder="Ví dụ: phí kiểm hàng, phụ phí..."></textarea>
+          <textarea name="otherExpenseNote" rows="2" maxlength="300" placeholder="Ví dụ: phí kiểm hàng, phụ phí...">${esc(existing?.otherExpenseNote || "")}</textarea>
         </label>
-        <label id="invoice-deduct-vnd-wrap">Trừ vốn tiền Việt (đ)<input name="capitalDeductVnd" type="number" min="0" step="1" value="0" /></label>
-        <label id="invoice-deduct-jpy-wrap" class="hidden">Trừ vốn tiền yên (JPY)<input name="capitalDeductJpy" type="number" min="0" step="1" value="0" /></label>
+        <label id="invoice-deduct-vnd-wrap">Trừ vốn tiền Việt (đ)<input name="capitalDeductVnd" type="number" min="0" step="1" value="${existing?.capitalDeductVnd ?? 0}" /></label>
+        <label id="invoice-deduct-jpy-wrap" class="hidden">Trừ vốn tiền yên (JPY)<input name="capitalDeductJpy" type="number" min="0" step="1" value="${existing?.capitalDeductJpy ?? 0}" /></label>
         <small id="invoice-capital-hint" class="full">Vốn tiền Việt còn lại: ${money(capital.vnd)}</small>
       </div>
       </div>
       <div class="form-actions">
         <button type="button" class="btn secondary" id="cancel-modal">Hủy</button>
-        <button class="btn" id="invoice-submit" type="submit">Lưu hóa đơn</button>
+        <button class="btn" id="invoice-submit" type="submit">${editing ? "Lưu thay đổi" : "Lưu hóa đơn"}</button>
       </div>
     </form>
   `);
@@ -1089,7 +1130,7 @@ function invoiceForm() {
     capitalHint.textContent = yen
       ? `Vốn tiền yên còn lại: ${moneyJpy(capital.yen)}`
       : `Vốn tiền Việt còn lại: ${money(capital.vnd)}`;
-    if (document.getElementById("invoice-type")?.value === "export") {
+    if (document.getElementById("invoice-type")?.value === "export" && !editing) {
       shippingInput.required = false;
       otherInput.required = false;
       document.getElementById("invoice-value").required = false;
@@ -1104,7 +1145,7 @@ function invoiceForm() {
   const supportedBox = document.getElementById("invoice-supported");
   const submitButton = document.getElementById("invoice-submit");
   const updateInvoiceType = () => {
-    const unsupported = typeSelect.value === "export";
+    const unsupported = typeSelect.value === "export" && !editing;
     typeStatus.classList.toggle("hidden", !unsupported);
     unsupportedBox.classList.toggle("hidden", !unsupported);
     supportedBox.classList.toggle("hidden", unsupported);
@@ -1117,13 +1158,19 @@ function invoiceForm() {
   updateInvoiceType();
 
   document.getElementById("cancel-modal").onclick = closeModal;
-  document.getElementById("add-invoice-line").onclick = addInvoiceLine;
-  addInvoiceLine();
-  document.getElementById("invoice-form").onsubmit = submitInvoice;
+  document.getElementById("add-invoice-line").onclick = () => addInvoiceLine();
+  if (existing?.items?.length) {
+    existing.items.forEach((item) => addInvoiceLine(item.productId, item.quantity || item.qty || 1));
+  } else {
+    addInvoiceLine();
+  }
+  document.getElementById("invoice-form").onsubmit = (event) => submitInvoice(event, existing?.id);
 }
 
-function submitInvoice(event) {
+function submitInvoice(event, invoiceId) {
   event.preventDefault();
+  const existing = invoiceId ? state.invoices.find((invoice) => invoice.id === invoiceId) : null;
+  if (invoiceId && !existing) return toast("Không tìm thấy hóa đơn");
   const formData = new FormData(event.currentTarget);
   const date = String(formData.get("date") || "");
   const invoiceDate = new Date(`${date}T12:00:00`);
@@ -1154,7 +1201,7 @@ function submitInvoice(event) {
   if (!items.length) return toast("Hãy thêm ít nhất một sản phẩm vào hóa đơn");
 
   const type = formData.get("type");
-  if (type === "export") return toast("Hóa đơn xuất hàng hiện chưa hỗ trợ");
+  if (type === "export" && !existing) return toast("Hóa đơn xuất hàng hiện chưa hỗ trợ");
   const currency = document.getElementById("invoice-currency")?.checked ? "jpy" : "vnd";
   const invoiceValue = Number(formData.get("invoiceValue"));
   const shippingFee = currency === "jpy" ? 0 : Number(formData.get("shippingFee"));
@@ -1165,31 +1212,23 @@ function submitInvoice(event) {
   if ([shippingFee, otherExpense, invoiceValue, capitalDeductVnd, capitalDeductJpy].some((amount) => !Number.isFinite(amount) || amount < 0)) {
     return toast("Chi phí, giá trị hóa đơn và số trừ vốn phải là số không âm");
   }
-  const capital = remainingCapital();
+  const capital = remainingCapitalExcludingInvoice(existing?.id);
   if (capitalDeductVnd > capital.vnd) return toast("Số trừ vốn tiền Việt vượt quá vốn còn lại");
   if (capitalDeductJpy > capital.yen) return toast("Số trừ vốn tiền yên vượt quá vốn còn lại");
-  if (type === "export") {
-    for (const [productId, quantity] of quantities) {
-      const product = productById(productId);
-      if (quantity > Number(product.stock || 0)) {
-        return toast(`Không đủ tồn kho cho sản phẩm ${product.sku}`);
-      }
-    }
-  }
+  const stockConflict = invoiceStockConflict(existing, type, quantities);
+  if (stockConflict) return toast(`Không đủ tồn kho cho sản phẩm ${stockConflict}`);
 
   const requestedCode = String(formData.get("code") || "").trim();
-  const sequence = state.invoices.filter((invoice) => invoice.date === date && invoice.type === type).length + 1;
-  const code = requestedCode || `${type === "import" ? "PN" : "PX"}-${date.replaceAll("-", "")}-${String(sequence).padStart(3, "0")}`;
-  if (state.invoices.some((invoice) => String(invoice.code || "").trim().toLocaleUpperCase("vi-VN") === code.toLocaleUpperCase("vi-VN"))) {
+  const sequence = state.invoices.filter((invoice) => invoice.id !== existing?.id && invoice.date === date && invoice.type === type).length + 1;
+  const code = requestedCode || existing?.code || `${type === "import" ? "PN" : "PX"}-${date.replaceAll("-", "")}-${String(sequence).padStart(3, "0")}`;
+  if (state.invoices.some((invoice) => invoice.id !== existing?.id && String(invoice.code || "").trim().toLocaleUpperCase("vi-VN") === code.toLocaleUpperCase("vi-VN"))) {
     return toast("Mã hóa đơn đã tồn tại");
   }
 
-  quantities.forEach((quantity, productId) => {
-    const product = productById(productId);
-    product.stock = Number(product.stock || 0) + (type === "import" ? quantity : -quantity);
-  });
-  state.invoices.unshift({
-    id: uid("invoice"),
+  if (existing) applyInvoiceStock(existing.items, existing.type, -1);
+  applyInvoiceStock(items, type, 1);
+  const record = {
+    id: existing?.id || uid("invoice"),
     code,
     type,
     currency,
@@ -1201,10 +1240,12 @@ function submitInvoice(event) {
     invoiceValue,
     capitalDeductVnd,
     capitalDeductJpy,
-  });
+  };
+  if (existing) Object.assign(existing, record);
+  else state.invoices.unshift(record);
   save();
   closeModal();
-  toast("Đã lưu hóa đơn " + code);
+  toast(existing ? "Đã cập nhật hóa đơn " + code : "Đã lưu hóa đơn " + code);
   renderInvoices();
 }
 
@@ -1232,7 +1273,29 @@ function invoiceDetails(id) {
          <p>Chi phí phát sinh: ${money(invoice.otherExpense)}</p>
          <p><strong>Giá trị hóa đơn: ${money(invoice.invoiceValue)}</strong></p>
          <p>Trừ vốn tiền Việt: ${money(invoice.capitalDeductVnd)}</p>`}
+    <div class="form-actions">
+      <button class="btn secondary" id="edit-invoice" type="button">Sửa</button>
+      <button class="btn danger" id="delete-invoice" type="button">Xóa</button>
+    </div>
   `);
+  document.getElementById("edit-invoice").onclick = () => invoiceForm(id);
+  document.getElementById("delete-invoice").onclick = () => deleteInvoice(id);
+}
+
+function deleteInvoice(id) {
+  const invoice = state.invoices.find((item) => item.id === id);
+  if (!invoice) return;
+  if (!confirm(`Xóa hóa đơn ${invoice.code}? Tồn kho và vốn đã trừ sẽ được hoàn lại.`)) return;
+  const conflict = invoiceStockConflict(invoice, invoice.type, new Map());
+  if (conflict) {
+    return toast(`Không xóa được vì hoàn kho sẽ làm tồn ${conflict} bị âm`);
+  }
+  applyInvoiceStock(invoice.items, invoice.type, -1);
+  state.invoices = state.invoices.filter((item) => item.id !== id);
+  save();
+  closeModal();
+  toast("Đã xóa hóa đơn " + invoice.code);
+  renderInvoices();
 }
 
 function renderContributions() {
