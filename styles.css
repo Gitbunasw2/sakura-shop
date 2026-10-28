@@ -256,6 +256,16 @@ th {
   color: var(--ok);
 }
 
+.badge.unsupported {
+  background: #fde8d7;
+  color: var(--warn);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .badge.status-new {
   background: #e8eefc;
   color: #314e89;

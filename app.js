@@ -928,19 +928,42 @@ function deleteCancelledOrder(id) {
   renderOrders();
 }
 
+function invoiceTypeLabel(type) {
+  if (type === "import") return "Nhập hàng";
+  if (type === "export") return "Xuất hàng";
+  return type || "—";
+}
+
+function invoiceStatusLabel(invoice) {
+  return invoice.type === "export" ? "Chưa hỗ trợ" : "Đã ghi nhận";
+}
+
 function renderInvoices() {
-  const invoices = [...state.invoices].sort((a, b) => b.date.localeCompare(a.date));
-  document.getElementById("view-invoices").innerHTML = invoices.length
-    ? `<div class="table-wrap"><table><thead><tr>
-        <th>Ngày</th><th>Mã hóa đơn</th><th>Loại</th><th>Tiền</th><th>Sản phẩm</th><th>Phí vận chuyển</th><th>Chi phí phát sinh</th><th>Giá trị hóa đơn</th><th>Trừ vốn Việt</th><th>Trừ vốn yên</th><th></th>
+  const typeFilter = document.getElementById("inv-type")?.value || "";
+  const invoices = [...state.invoices]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .filter((invoice) => !typeFilter || invoice.type === typeFilter);
+  document.getElementById("view-invoices").innerHTML = `
+    <div class="toolbar">
+      <select id="inv-type">
+        <option value="">Mọi loại</option>
+        <option value="import" ${typeFilter === "import" ? "selected" : ""}>Nhập hàng</option>
+        <option value="export" ${typeFilter === "export" ? "selected" : ""}>Xuất hàng</option>
+      </select>
+    </div>
+    ${invoices.length
+      ? `<div class="table-wrap"><table><thead><tr>
+        <th>Ngày</th><th>Mã hóa đơn</th><th>Loại</th><th>Trạng thái</th><th>Tiền</th><th>Sản phẩm</th><th>Phí vận chuyển</th><th>Chi phí phát sinh</th><th>Giá trị hóa đơn</th><th>Trừ vốn Việt</th><th>Trừ vốn yên</th><th></th>
       </tr></thead><tbody>
       ${invoices.map((invoice) => {
         const productSummary = invoice.items.map((item) => `${item.name} × ${item.quantity || item.qty}`).join(", ");
         const yen = invoiceCurrency(invoice) === "jpy";
+        const unsupported = invoice.type === "export";
         return `<tr>
           <td>${formatOrderDate(new Date(`${invoice.date}T12:00:00`).getTime())}</td>
           <td><strong>${esc(invoice.code)}</strong></td>
-          <td>${invoice.type === "import" ? "Nhập" : "Xuất"}</td>
+          <td>${invoiceTypeLabel(invoice.type)}</td>
+          <td><span class="badge ${unsupported ? "unsupported" : "ok"}">${invoiceStatusLabel(invoice)}</span></td>
           <td>${yen ? "Tiền yên" : "Tiền Việt"}</td>
           <td>${esc(productSummary)}</td>
           <td>${yen ? "—" : money(invoice.shippingFee)}</td>
@@ -952,8 +975,10 @@ function renderInvoices() {
         </tr>`;
       }).join("")}
       </tbody></table></div>`
-    : `<div class="card empty">Chưa có hóa đơn nhập/xuất.</div>`;
+      : `<div class="card empty">${typeFilter === "export" ? "Hóa đơn xuất hàng hiện chưa hỗ trợ." : "Chưa có hóa đơn nhập/xuất."}</div>`}
+  `;
 
+  document.getElementById("inv-type").onchange = renderInvoices;
   document.querySelectorAll("[data-invoice-view]").forEach((button) => {
     button.onclick = () => invoiceDetails(button.dataset.invoiceView);
   });
@@ -993,12 +1018,13 @@ function invoiceForm() {
     <form id="invoice-form" class="stack">
       <div class="form-grid">
         <label>Loại hóa đơn
-          <select name="type" required>
+          <select name="type" id="invoice-type" required>
             <option value="import">Nhập hàng</option>
             <option value="export">Xuất hàng</option>
           </select>
         </label>
         <label>Ngày hóa đơn<input name="date" type="date" required value="${dateInputValue(Date.now())}" /></label>
+        <p id="invoice-type-status" class="full hidden">Trạng thái: <span class="badge unsupported">Chưa hỗ trợ</span></p>
         <label class="switch-toggle full">
           <span id="invoice-vnd-side">Hóa đơn tiền Việt</span>
           <input id="invoice-currency" type="checkbox" />
@@ -1007,6 +1033,8 @@ function invoiceForm() {
         </label>
         <label class="full">Mã hóa đơn<input name="code" maxlength="80" placeholder="Để trống để tự tạo mã" /></label>
       </div>
+      <div id="invoice-unsupported" class="card empty hidden">Hóa đơn xuất hàng hiện chưa hỗ trợ.</div>
+      <div id="invoice-supported">
       <h3>Sản phẩm</h3>
       <div id="invoice-lines" class="order-lines"></div>
       <button type="button" class="btn secondary" id="add-invoice-line">Thêm sản phẩm</button>
@@ -1024,9 +1052,10 @@ function invoiceForm() {
         <label id="invoice-deduct-jpy-wrap" class="hidden">Trừ vốn tiền yên (JPY)<input name="capitalDeductJpy" type="number" min="0" step="1" value="0" /></label>
         <small id="invoice-capital-hint" class="full">Vốn tiền Việt còn lại: ${money(capital.vnd)}</small>
       </div>
+      </div>
       <div class="form-actions">
         <button type="button" class="btn secondary" id="cancel-modal">Hủy</button>
-        <button class="btn" type="submit">Lưu hóa đơn</button>
+        <button class="btn" id="invoice-submit" type="submit">Lưu hóa đơn</button>
       </div>
     </form>
   `);
@@ -1060,9 +1089,32 @@ function invoiceForm() {
     capitalHint.textContent = yen
       ? `Vốn tiền yên còn lại: ${moneyJpy(capital.yen)}`
       : `Vốn tiền Việt còn lại: ${money(capital.vnd)}`;
+    if (document.getElementById("invoice-type")?.value === "export") {
+      shippingInput.required = false;
+      otherInput.required = false;
+      document.getElementById("invoice-value").required = false;
+    }
   };
   currencyToggle.onchange = updateInvoiceCurrency;
   updateInvoiceCurrency();
+
+  const typeSelect = document.getElementById("invoice-type");
+  const typeStatus = document.getElementById("invoice-type-status");
+  const unsupportedBox = document.getElementById("invoice-unsupported");
+  const supportedBox = document.getElementById("invoice-supported");
+  const submitButton = document.getElementById("invoice-submit");
+  const updateInvoiceType = () => {
+    const unsupported = typeSelect.value === "export";
+    typeStatus.classList.toggle("hidden", !unsupported);
+    unsupportedBox.classList.toggle("hidden", !unsupported);
+    supportedBox.classList.toggle("hidden", unsupported);
+    submitButton.disabled = unsupported;
+    shippingInput.required = !unsupported && !currencyToggle.checked;
+    otherInput.required = !unsupported && !currencyToggle.checked;
+    document.getElementById("invoice-value").required = !unsupported;
+  };
+  typeSelect.onchange = updateInvoiceType;
+  updateInvoiceType();
 
   document.getElementById("cancel-modal").onclick = closeModal;
   document.getElementById("add-invoice-line").onclick = addInvoiceLine;
@@ -1102,6 +1154,7 @@ function submitInvoice(event) {
   if (!items.length) return toast("Hãy thêm ít nhất một sản phẩm vào hóa đơn");
 
   const type = formData.get("type");
+  if (type === "export") return toast("Hóa đơn xuất hàng hiện chưa hỗ trợ");
   const currency = document.getElementById("invoice-currency")?.checked ? "jpy" : "vnd";
   const invoiceValue = Number(formData.get("invoiceValue"));
   const shippingFee = currency === "jpy" ? 0 : Number(formData.get("shippingFee"));
@@ -1160,7 +1213,8 @@ function invoiceDetails(id) {
   if (!invoice) return;
   const yen = invoiceCurrency(invoice) === "jpy";
   openModal("Hóa đơn " + invoice.code, `
-    <p>Loại hóa đơn: <strong>${invoice.type === "import" ? "Nhập hàng" : "Xuất hàng"}</strong></p>
+    <p>Loại hóa đơn: <strong>${invoiceTypeLabel(invoice.type)}</strong></p>
+    <p>Trạng thái: <span class="badge ${invoice.type === "export" ? "unsupported" : "ok"}">${invoiceStatusLabel(invoice)}</span></p>
     <p>Tiền hóa đơn: <strong>${yen ? "Tiền yên" : "Tiền Việt"}</strong></p>
     <p>Ngày: ${formatOrderDate(new Date(`${invoice.date}T12:00:00`).getTime())}</p>
     <table><thead><tr><th>SKU</th><th>Sản phẩm</th><th>Size / màu</th><th>Số lượng</th></tr></thead><tbody>
