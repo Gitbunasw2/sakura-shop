@@ -539,6 +539,12 @@ function renderDashboard() {
   const periodCapital = remainingCapital(periodContributions, periodInvoices);
   const totalVndCapital = periodCapital.vnd;
   const totalYenCapital = periodCapital.yen;
+  const surchargeSpent = periodInvoices.reduce((totals, invoice) => {
+    const amount = invoiceSurcharge(invoice);
+    if (invoiceCurrency(invoice) === "jpy") totals.yen += amount;
+    else totals.vnd += amount;
+    return totals;
+  }, { vnd: 0, yen: 0 });
   const contributorTotals = [...contributionTotals.values()].sort((a, b) =>
     b.vndCapital - a.vndCapital || b.yenCapital - a.yenCapital
   );
@@ -590,6 +596,7 @@ function renderDashboard() {
       <div class="card"><div class="label">Tổng giá trị kho hàng</div><div class="value" style="font-size:20px">${money(inventoryValue)}</div></div>
       <div class="card"><div class="label">Vốn tiền Việt (${periodName})</div><div class="value" style="font-size:20px">${money(totalVndCapital)}</div></div>
       <div class="card"><div class="label">Vốn tiền yên (${periodName})</div><div class="value" style="font-size:20px">${moneyJpy(totalYenCapital)}</div></div>
+      <div class="card"><div class="label">Tiền phụ phí đã tiêu (${periodName})</div><div class="value" style="font-size:20px">${money(surchargeSpent.vnd)}</div><div class="label" style="margin-top:8px">${moneyJpy(surchargeSpent.yen)}</div></div>
       <div class="card"><div class="label">${openOrdersLabel}</div><div class="value">${openOrders}</div></div>
       <div class="card"><div class="label">Doanh thu (${filteredPeriodLabel})</div><div class="value" style="font-size:20px">${money(revenue)}</div></div>
       <div class="card"><div class="label">${profitLabel}</div><div class="value" style="font-size:20px">${money(profit)}</div></div>
