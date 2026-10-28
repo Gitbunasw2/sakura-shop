@@ -172,12 +172,11 @@ function normalizeState(parsed) {
     if (contribution.amountJpy === undefined) contribution.amountJpy = 0;
     if (contribution.exchangeRate === undefined) contribution.exchangeRate = 0;
     if (contribution.sourceCurrency !== "jpy") contribution.sourceCurrency = "vnd";
-    if (Number(contribution.exchangeRate) > 0) {
-      if (contribution.sourceCurrency === "jpy") {
-        contribution.amountVnd = vndFromYen(contribution.amountJpy, contribution.exchangeRate);
-      } else {
-        contribution.amountJpy = yenFromVnd(contribution.amountVnd, contribution.exchangeRate);
-      }
+    if (contribution.sourceCurrency === "jpy" && Number(contribution.exchangeRate) > 0) {
+      contribution.amountJpy = yenFromVnd(contribution.amountVnd, contribution.exchangeRate);
+    } else if (contribution.sourceCurrency === "vnd") {
+      contribution.amountJpy = 0;
+      contribution.exchangeRate = 0;
     }
   });
   return { products, orders, categories, contributions, invoices };
@@ -254,13 +253,6 @@ function yenFromVnd(amountVnd, rate) {
   const exchangeRate = Number(rate);
   if (!Number.isFinite(vnd) || vnd <= 0 || !Number.isFinite(exchangeRate) || exchangeRate <= 0) return 0;
   return Math.round(vnd / exchangeRate);
-}
-
-function vndFromYen(amountJpy, rate) {
-  const yen = Number(amountJpy);
-  const exchangeRate = Number(rate);
-  if (!Number.isFinite(yen) || yen <= 0 || !Number.isFinite(exchangeRate) || exchangeRate <= 0) return 0;
-  return Math.round(yen * exchangeRate);
 }
 
 function contributionSource(contribution) {
@@ -1090,16 +1082,16 @@ function renderContributions() {
       <div class="card"><div class="label">Số lần góp</div><div class="value">${contributions.length}</div></div>
     </div>
     ${contributions.length
-      ? `<div class="table-wrap"><table><thead><tr><th>Ngày góp vốn</th><th>Người góp</th><th>Loại vốn</th><th>Số tiền góp</th><th>Tỷ giá</th><th>Quy đổi</th><th></th></tr></thead><tbody>
+      ? `<div class="table-wrap"><table><thead><tr><th>Ngày góp vốn</th><th>Người góp</th><th>Loại vốn</th><th>Số tiền (VNĐ)</th><th>Tỷ giá</th><th>Số tiền (JPY)</th><th></th></tr></thead><tbody>
         ${contributions.map((contribution) => {
           const isYen = contributionSource(contribution) === "jpy";
           return `<tr>
           <td>${formatOrderDate(new Date(`${contribution.date}T12:00:00`).getTime())}</td>
           <td><strong>${esc(contribution.contributor)}</strong></td>
           <td>${isYen ? "Tiền yên" : "Tiền Việt"}</td>
-          <td>${isYen ? moneyJpy(contribution.amountJpy) : money(contribution.amountVnd)}</td>
-          <td>${Number(contribution.exchangeRate) > 0 ? Number(contribution.exchangeRate).toLocaleString("vi-VN") : "—"}</td>
-          <td>${isYen ? money(contribution.amountVnd) : moneyJpy(contribution.amountJpy)}</td>
+          <td>${money(contribution.amountVnd)}</td>
+          <td>${isYen && Number(contribution.exchangeRate) > 0 ? Number(contribution.exchangeRate).toLocaleString("vi-VN") : "—"}</td>
+          <td>${isYen ? moneyJpy(contribution.amountJpy) : "—"}</td>
           <td class="row-actions">
             <button class="btn secondary" data-contribution-edit="${esc(contribution.id)}">Sửa</button>
             <button class="btn danger" data-contribution-delete="${esc(contribution.id)}">Xóa</button>
@@ -1125,9 +1117,6 @@ function contributionForm(id) {
   const initialRate = Number(contribution?.exchangeRate) > 0
     ? Number(contribution.exchangeRate)
     : defaultContributionRate();
-  const initialAmount = initialSource === "jpy"
-    ? (contribution?.amountJpy || "")
-    : (contribution?.amountVnd || "");
 
   openModal(id ? "Sửa khoản góp vốn" : "Thêm khoản góp vốn", `
     <form id="contribution-form" class="form-grid">
@@ -1139,11 +1128,11 @@ function contributionForm(id) {
         <span class="shipping-payer-switch" aria-hidden="true"></span>
         <span id="contribution-yen-side">Góp tiền yên</span>
       </label>
-      <label><span id="contribution-amount-title">Số tiền (VNĐ)</span>
-        <input id="contribution-amount" name="amount" type="number" min="1" step="1" required value="${initialAmount}" placeholder="0" />
+      <label id="contribution-amount-wrap" class="full">Số tiền (VNĐ)
+        <input id="contribution-amount" name="amountVnd" type="number" min="1" step="1" required value="${contribution?.amountVnd || ""}" placeholder="0" />
       </label>
-      <label>Tỷ giá (VNĐ / JPY)<input id="contribution-rate" name="exchangeRate" type="number" min="1" step="0.01" required value="${initialRate}" /></label>
-      <label class="full"><span id="contribution-converted-title">Quy đổi (JPY)</span>
+      <label id="contribution-rate-wrap">Tỷ giá (VNĐ / JPY)<input id="contribution-rate" name="exchangeRate" type="number" min="1" step="0.01" value="${initialRate}" /></label>
+      <label id="contribution-converted-wrap" class="full">Số tiền (JPY)
         <input id="contribution-converted" type="text" readonly value="" />
       </label>
       <div class="form-actions full">
@@ -1157,8 +1146,9 @@ function contributionForm(id) {
   const amountInput = document.getElementById("contribution-amount");
   const rateInput = document.getElementById("contribution-rate");
   const convertedInput = document.getElementById("contribution-converted");
-  const amountTitle = document.getElementById("contribution-amount-title");
-  const convertedTitle = document.getElementById("contribution-converted-title");
+  const amountWrap = document.getElementById("contribution-amount-wrap");
+  const rateWrap = document.getElementById("contribution-rate-wrap");
+  const convertedWrap = document.getElementById("contribution-converted-wrap");
   const vndSide = document.getElementById("contribution-vnd-side");
   const yenSide = document.getElementById("contribution-yen-side");
 
@@ -1167,11 +1157,11 @@ function contributionForm(id) {
     const yen = isYenSource();
     vndSide.style.fontWeight = yen ? "400" : "600";
     yenSide.style.fontWeight = yen ? "600" : "400";
-    amountTitle.textContent = yen ? "Số tiền (JPY)" : "Số tiền (VNĐ)";
-    convertedTitle.textContent = yen ? "Quy đổi (VNĐ)" : "Quy đổi (JPY)";
-    convertedInput.value = yen
-      ? money(vndFromYen(amountInput.value, rateInput.value))
-      : moneyJpy(yenFromVnd(amountInput.value, rateInput.value));
+    amountWrap.classList.toggle("full", !yen);
+    rateWrap.classList.toggle("hidden", !yen);
+    convertedWrap.classList.toggle("hidden", !yen);
+    rateInput.required = yen;
+    convertedInput.value = yen ? moneyJpy(yenFromVnd(amountInput.value, rateInput.value)) : "";
   };
   currencyToggle.onchange = updateContributionPreview;
   amountInput.oninput = updateContributionPreview;
@@ -1183,12 +1173,16 @@ function contributionForm(id) {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.target).entries());
     const sourceCurrency = isYenSource() ? "jpy" : "vnd";
-    const amount = Number(data.amount);
-    const exchangeRate = Number(data.exchangeRate);
-    if (!Number.isFinite(amount) || amount <= 0) return toast("Số tiền góp phải lớn hơn 0");
-    if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) return toast("Tỷ giá phải lớn hơn 0");
-    const amountVnd = sourceCurrency === "jpy" ? vndFromYen(amount, exchangeRate) : amount;
-    const amountJpy = sourceCurrency === "jpy" ? amount : yenFromVnd(amount, exchangeRate);
+    const amountVnd = Number(data.amountVnd);
+    if (!Number.isFinite(amountVnd) || amountVnd <= 0) return toast("Số tiền góp phải lớn hơn 0");
+
+    let exchangeRate = 0;
+    let amountJpy = 0;
+    if (sourceCurrency === "jpy") {
+      exchangeRate = Number(data.exchangeRate);
+      if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) return toast("Tỷ giá phải lớn hơn 0");
+      amountJpy = yenFromVnd(amountVnd, exchangeRate);
+    }
 
     const record = {
       id: contribution?.id || uid("capital"),
