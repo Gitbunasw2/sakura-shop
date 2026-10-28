@@ -374,7 +374,9 @@ th {
   grid-column: 1 / -1;
 }
 
-.form-grid .shipping-payer-toggle {
+.form-grid .shipping-payer-toggle,
+.form-grid .switch-toggle {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -382,7 +384,8 @@ th {
   cursor: pointer;
 }
 
-.shipping-payer-toggle input {
+.shipping-payer-toggle input,
+.switch-toggle input {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -411,15 +414,18 @@ th {
   transition: transform 140ms ease;
 }
 
-.shipping-payer-toggle input:checked + .shipping-payer-switch {
+.shipping-payer-toggle input:checked + .shipping-payer-switch,
+.switch-toggle input:checked + .shipping-payer-switch {
   background: var(--ok);
 }
 
-.shipping-payer-toggle input:checked + .shipping-payer-switch::after {
+.shipping-payer-toggle input:checked + .shipping-payer-switch::after,
+.switch-toggle input:checked + .shipping-payer-switch::after {
   transform: translateX(18px);
 }
 
-.shipping-payer-toggle input:focus-visible + .shipping-payer-switch {
+.shipping-payer-toggle input:focus-visible + .shipping-payer-switch,
+.switch-toggle input:focus-visible + .shipping-payer-switch {
   outline: 2px solid var(--sakura);
   outline-offset: 2px;
 }
