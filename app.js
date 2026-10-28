@@ -179,6 +179,10 @@ function normalizeState(parsed) {
       contribution.exchangeRate = 0;
     }
   });
+  invoices.forEach((invoice) => {
+    if (invoice.capitalDeductVnd === undefined) invoice.capitalDeductVnd = 0;
+    if (invoice.capitalDeductJpy === undefined) invoice.capitalDeductJpy = 0;
+  });
   return { products, orders, categories, contributions, invoices };
 }
 
@@ -257,6 +261,28 @@ function yenFromVnd(amountVnd, rate) {
 
 function contributionSource(contribution) {
   return contribution?.sourceCurrency === "jpy" ? "jpy" : "vnd";
+}
+
+function contributedCapital(contributions = state.contributions) {
+  return contributions.reduce((totals, contribution) => {
+    if (contributionSource(contribution) === "jpy") totals.yen += Number(contribution.amountJpy || 0);
+    else totals.vnd += Number(contribution.amountVnd || 0);
+    return totals;
+  }, { vnd: 0, yen: 0 });
+}
+
+function deductedCapital(invoices = state.invoices) {
+  return invoices.reduce((totals, invoice) => {
+    totals.vnd += Number(invoice.capitalDeductVnd || 0);
+    totals.yen += Number(invoice.capitalDeductJpy || 0);
+    return totals;
+  }, { vnd: 0, yen: 0 });
+}
+
+function remainingCapital(contributions = state.contributions, invoices = state.invoices) {
+  const added = contributedCapital(contributions);
+  const used = deductedCapital(invoices);
+  return { vnd: added.vnd - used.vnd, yen: added.yen - used.yen };
 }
 
 function defaultContributionRate() {
@@ -419,6 +445,7 @@ function renderDashboard() {
     selectedYear,
     ...state.orders.map((order) => new Date(order.createdAt).getFullYear()).filter(Number.isFinite),
     ...state.contributions.map((contribution) => new Date(`${contribution.date}T12:00:00`).getFullYear()).filter(Number.isFinite),
+    ...state.invoices.map((invoice) => new Date(`${invoice.date}T12:00:00`).getFullYear()).filter(Number.isFinite),
   ])].sort((a, b) => b - a);
   const low = state.products.filter((p) => p.stock <= p.minStock);
   const sku = state.products.length;
@@ -446,8 +473,13 @@ function renderDashboard() {
     }
     contributionTotals.set(key, existing);
   });
-  const totalVndCapital = [...contributionTotals.values()].reduce((sum, item) => sum + item.vndCapital, 0);
-  const totalYenCapital = [...contributionTotals.values()].reduce((sum, item) => sum + item.yenCapital, 0);
+  const periodInvoices = state.invoices.filter((invoice) => {
+    const createdAt = new Date(`${invoice.date}T12:00:00`).getTime();
+    return Number.isFinite(createdAt) && orderMatchesPeriod({ createdAt }, period, selectedDate);
+  });
+  const periodCapital = remainingCapital(periodContributions, periodInvoices);
+  const totalVndCapital = periodCapital.vnd;
+  const totalYenCapital = periodCapital.yen;
   const contributorTotals = [...contributionTotals.values()].sort((a, b) =>
     b.vndCapital - a.vndCapital || b.yenCapital - a.yenCapital
   );
@@ -888,10 +920,10 @@ function renderInvoices() {
   const invoices = [...state.invoices].sort((a, b) => b.date.localeCompare(a.date));
   document.getElementById("view-invoices").innerHTML = invoices.length
     ? `<div class="table-wrap"><table><thead><tr>
-        <th>Ngày</th><th>Mã hóa đơn</th><th>Loại</th><th>Sản phẩm</th><th>Phí vận chuyển</th><th>Chi phí phát sinh</th><th>Giá trị hóa đơn</th><th></th>
+        <th>Ngày</th><th>Mã hóa đơn</th><th>Loại</th><th>Sản phẩm</th><th>Phí vận chuyển</th><th>Chi phí phát sinh</th><th>Giá trị hóa đơn</th><th>Trừ vốn Việt</th><th>Trừ vốn yên</th><th></th>
       </tr></thead><tbody>
       ${invoices.map((invoice) => {
-        const productSummary = invoice.items.map((item) => `${item.name} × ${item.qty}`).join(", ");
+        const productSummary = invoice.items.map((item) => `${item.name} × ${item.quantity || item.qty}`).join(", ");
         return `<tr>
           <td>${formatOrderDate(new Date(`${invoice.date}T12:00:00`).getTime())}</td>
           <td><strong>${esc(invoice.code)}</strong></td>
@@ -900,6 +932,8 @@ function renderInvoices() {
           <td>${money(invoice.shippingFee)}</td>
           <td>${money(invoice.otherExpense)}</td>
           <td><strong>${money(invoice.invoiceValue)}</strong></td>
+          <td>${money(invoice.capitalDeductVnd)}</td>
+          <td>${moneyJpy(invoice.capitalDeductJpy)}</td>
           <td><button class="btn secondary" data-invoice-view="${esc(invoice.id)}">Chi tiết</button></td>
         </tr>`;
       }).join("")}
@@ -939,6 +973,7 @@ function invoiceForm() {
     toast("Hãy thêm sản phẩm vào kho trước");
     return;
   }
+  const capital = remainingCapital();
 
   openModal("Tạo hóa đơn nhập/xuất", `
     <form id="invoice-form" class="stack">
@@ -959,6 +994,9 @@ function invoiceForm() {
         <label>Chi phí vận chuyển (đ)<input name="shippingFee" type="number" min="0" step="1" value="0" required /></label>
         <label>Chi phí phát sinh (đ)<input name="otherExpense" type="number" min="0" step="1" value="0" required /></label>
         <label class="full">Giá trị hóa đơn (đ)<input name="invoiceValue" type="number" min="0" step="1" required /></label>
+        <label>Trừ vốn tiền Việt (đ)<input name="capitalDeductVnd" type="number" min="0" step="1" value="0" /></label>
+        <label>Trừ vốn tiền yên (JPY)<input name="capitalDeductJpy" type="number" min="0" step="1" value="0" /></label>
+        <small class="full">Vốn còn lại hiện tại: ${money(capital.vnd)} · ${moneyJpy(capital.yen)}</small>
       </div>
       <div class="form-actions">
         <button type="button" class="btn secondary" id="cancel-modal">Hủy</button>
@@ -1008,9 +1046,14 @@ function submitInvoice(event) {
   const shippingFee = Number(formData.get("shippingFee"));
   const otherExpense = Number(formData.get("otherExpense"));
   const invoiceValue = Number(formData.get("invoiceValue"));
-  if ([shippingFee, otherExpense, invoiceValue].some((amount) => !Number.isFinite(amount) || amount < 0)) {
-    return toast("Chi phí và giá trị hóa đơn phải là số không âm");
+  const capitalDeductVnd = Number(formData.get("capitalDeductVnd") || 0);
+  const capitalDeductJpy = Number(formData.get("capitalDeductJpy") || 0);
+  if ([shippingFee, otherExpense, invoiceValue, capitalDeductVnd, capitalDeductJpy].some((amount) => !Number.isFinite(amount) || amount < 0)) {
+    return toast("Chi phí, giá trị hóa đơn và số trừ vốn phải là số không âm");
   }
+  const capital = remainingCapital();
+  if (capitalDeductVnd > capital.vnd) return toast("Số trừ vốn tiền Việt vượt quá vốn còn lại");
+  if (capitalDeductJpy > capital.yen) return toast("Số trừ vốn tiền yên vượt quá vốn còn lại");
   if (type === "export") {
     for (const [productId, quantity] of quantities) {
       const product = productById(productId);
@@ -1040,6 +1083,8 @@ function submitInvoice(event) {
     shippingFee,
     otherExpense,
     invoiceValue,
+    capitalDeductVnd,
+    capitalDeductJpy,
   });
   save();
   closeModal();
@@ -1063,17 +1108,16 @@ function invoiceDetails(id) {
     <p>Chi phí vận chuyển: ${money(invoice.shippingFee)}</p>
     <p>Chi phí phát sinh: ${money(invoice.otherExpense)}</p>
     <p><strong>Giá trị hóa đơn: ${money(invoice.invoiceValue)}</strong></p>
+    <p>Trừ vốn tiền Việt: ${money(invoice.capitalDeductVnd)}</p>
+    <p>Trừ vốn tiền yên: ${moneyJpy(invoice.capitalDeductJpy)}</p>
   `);
 }
 
 function renderContributions() {
   const contributions = [...state.contributions].sort((a, b) => b.date.localeCompare(a.date));
-  const totalVndCapital = contributions.reduce((sum, contribution) => (
-    contributionSource(contribution) === "vnd" ? sum + Number(contribution.amountVnd || 0) : sum
-  ), 0);
-  const totalYenCapital = contributions.reduce((sum, contribution) => (
-    contributionSource(contribution) === "jpy" ? sum + Number(contribution.amountJpy || 0) : sum
-  ), 0);
+  const capital = remainingCapital();
+  const totalVndCapital = capital.vnd;
+  const totalYenCapital = capital.yen;
 
   document.getElementById("view-contributions").innerHTML = `
     <div class="cards">
